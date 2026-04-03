@@ -1,11 +1,19 @@
 """
-openclaw_tool.py — Enforx as an OpenClaw tool
-Place in ~/Documents/ENFORX/
-Register in your openclaw config as a tool.
+Enforx — OpenClaw Plugin Entry Point
 
-Usage inside openclaw tui:
-  > run enforx: Buy 5 shares of AAPL
-  > run enforx: Buy 100 shares of TSLA
+Registers Enforx as an OpenClaw tool. When OpenClaw's agent receives
+a trade-related request, it calls the enforx tool, which runs the
+full 10-layer Causal Integrity Enforcement pipeline.
+
+Installation:
+    openclaw plugins install ./ENFORX
+
+Usage (inside OpenClaw):
+    User: "Buy 5 shares of AAPL"
+    → OpenClaw agent recognizes trade intent
+    → Calls enforx tool
+    → Enforx runs 10-layer pipeline
+    → Returns result to OpenClaw agent
 """
 
 import json
@@ -13,122 +21,54 @@ import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
 from main import run_pipeline
 
 
-def enforx_tool(command: str, demo_mode: bool = True) -> dict:
-    """
-    OpenClaw-compatible tool function.
-    Called by OpenClaw when user invokes the enforx tool.
-
+def enforx_tool(command: str) -> dict:
+    """OpenClaw-compatible tool function.
+    
     Args:
-        command: Natural language trade command (e.g. "Buy 5 shares of AAPL")
-        demo_mode: If True, uses mock Alpaca (no real API calls)
-
+        command: Natural language trade command
+    
     Returns:
-        dict with keys: status, layers, decision, explanation
+        dict with status, layers, decision, explanation
     """
     try:
-        result = run_pipeline(command, demo_mode=demo_mode)
+        result = run_pipeline(command)
         return result
+    except ConnectionError as e:
+        return {"status": "ERROR", "error": f"Service unavailable: {e}"}
     except Exception as e:
-        return {
-            "status": "ERROR",
-            "error": str(e),
-            "command": command
-        }
+        return {"status": "ERROR", "error": str(e)}
 
 
-def format_for_tui(result: dict) -> str:
-    """Format pipeline result for OpenClaw TUI display."""
-    lines = []
-    lines.append("=" * 60)
-    lines.append(f"ENFORX — Causal Integrity Enforcement")
-    lines.append("=" * 60)
-
-    status = result.get("status", "UNKNOWN")
-    status_icon = {"PASS": "✅", "BLOCK": "🚫", "MODIFY": "⚠️", "ERROR": "❌"}.get(status, "❓")
-    lines.append(f"Final Decision: {status_icon} {status}")
-    lines.append("")
-
-    # Layer-by-layer breakdown
-    layers = result.get("layers", {})
-    if layers:
-        lines.append("Layer Results:")
-        layer_names = {
-            "1": "EnforxGuard Input Firewall",
-            "2": "Intent Formalization Engine",
-            "3": "Guided Reasoning Constraints",
-            "4": "Agent Core",
-            "5": "Plan-Intent Alignment Validator",
-            "6": "Causal Chain Validator",
-            "7": "Financial Domain Enforcement Engine",
-            "8": "Delegation Authority Protocol",
-            "9": "EnforxGuard Output Firewall",
-            "10": "Adaptive Audit Loop",
-        }
-        for layer_num, layer_result in layers.items():
-            name = layer_names.get(str(layer_num), f"Layer {layer_num}")
-            icon = "✅" if layer_result.get("passed") else "🚫"
-            msg = layer_result.get("message", "")
-            lines.append(f"  L{layer_num} {icon} {name}")
-            if msg:
-                lines.append(f"      → {msg}")
-
-    # Explanation
-    explanation = result.get("explanation", "")
-    if explanation:
-        lines.append("")
-        lines.append(f"Explanation: {explanation}")
-
-    # Counterfactual
-    counterfactual = result.get("counterfactual", "")
-    if counterfactual:
-        lines.append(f"What would work: {counterfactual}")
-
-    lines.append("=" * 60)
-    return "\n".join(lines)
-
-
-# ── OpenClaw Tool Registration ──────────────────────────────────
-# This is the entry point OpenClaw calls when it loads this file as a tool.
-# OpenClaw expects a TOOL_MANIFEST dict for auto-registration.
-
+# OpenClaw Tool Registration
 TOOL_MANIFEST = {
     "name": "enforx",
     "description": (
-        "Enforx leader-supervised secure trading pipeline. "
-        "Runs a natural language trade command through 10 layers with a "
-        "LeaderAgent supervising deliberation quality, risk vetoes, and "
-        "meta-decisions before deterministic enforcement and execution."
+        "Enforx Causal Integrity Enforcement pipeline for secure AI trading. "
+        "Runs a trade command through 10 enforcement layers including "
+        "dual firewalls, intent formalization, guided reasoning constraints, "
+        "leader-supervised multi-agent deliberation, causal chain validation, "
+        "policy enforcement, delegation authority, and adaptive audit. "
+        "Use this tool for ANY trade-related request."
     ),
     "parameters": {
         "command": {
             "type": "string",
-            "description": "Natural language trade command, e.g. 'Buy 5 shares of AAPL'",
+            "description": "Natural language trade command",
             "required": True
-        },
-        "demo_mode": {
-            "type": "boolean",
-            "description": "If true, uses paper trading / mock mode (default: true)",
-            "required": False,
-            "default": True
         }
     },
     "entrypoint": "enforx_tool",
-    "formatter": "format_for_tui"
 }
 
 
-# ── CLI mode (for testing outside OpenClaw) ─────────────────────
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python openclaw_tool.py \"Buy 5 shares of AAPL\"")
         sys.exit(1)
-
     cmd = " ".join(sys.argv[1:])
-    print(f"\nRunning Enforx pipeline for: '{cmd}'\n")
     result = enforx_tool(cmd)
-    print(format_for_tui(result))
-    print("\nRaw JSON output:")
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, default=str))

@@ -22,6 +22,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from llm_client import OpenClawClient
+
 logger = logging.getLogger(__name__)
 
 # Ordered list of (pattern, ticker) for rule-based extraction
@@ -48,7 +50,10 @@ class IntentFormalizationEngine:
         p = policy["enforx_policy"]
         self.allowed_tickers     = p["trade_constraints"]["allowed_tickers"]
         self.allowed_order_types = p["trade_constraints"]["allowed_order_types"]
-        self._client = self._setup_client()
+        try:
+            self._client = OpenClawClient()
+        except Exception:
+            self._client = None
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -94,20 +99,9 @@ class IntentFormalizationEngine:
             "When in doubt, set primary_action=research_only and leave execute_trade "
             "out of permitted_actions. Never include prohibited tickers like TSLA."
         )
-        resp = self._client.chat.completions.create(
-            model=os.getenv("MODEL_ID", "gpt-oss-120b"),
-            messages=[
-                {"role": "system", "content":
-                    "You are a financial intent parser. Parse user intent into a strict SID schema."},
-                {"role": "user",   "content": schema_desc},
-            ],
-            temperature=0.0,
-            max_tokens=500,
-        )
-        raw = resp.choices[0].message.content.strip()
-        start = raw.index("{")
-        end   = raw.rindex("}") + 1
-        data  = json.loads(raw[start:end])
+        system_prompt = "You are a financial intent parser. Parse user intent into a strict SID schema."
+        
+        data = self._client.chat_json(system_prompt, schema_desc, temperature=0.0, max_tokens=500)
         data["sid_id"] = sid_id
         return data
 
@@ -210,14 +204,6 @@ class IntentFormalizationEngine:
 
     # ── Client setup ─────────────────────────────────────────────────────────
 
-    def _setup_client(self):
-        try:
-            from openai import OpenAI
-            base_url = os.getenv("OPENCLAW_BASE_URL", "http://127.0.0.1:18789/v1")
-            api_key  = os.getenv("OPENCLAW_API_KEY",  "not-set")
-            return OpenAI(base_url=base_url, api_key=api_key)
-        except Exception:
-            return None
 
 
 # ── Standalone test ──────────────────────────────────────────────────────────

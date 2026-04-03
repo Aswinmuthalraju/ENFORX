@@ -27,10 +27,9 @@ class FinancialDomainEnforcementEngine:
     def __init__(
         self,
         policy_path: str | None = None,
-        skip_market_hours: bool = False,
-        demo_mode: bool = False,
     ):
-        self._skip_market_hours = skip_market_hours or demo_mode
+        import os
+        self._skip_market_hours = os.getenv("ENFORX_SKIP_MARKET_HOURS", "").lower() == "true"
         if policy_path is None:
             policy_path = Path(__file__).parent.parent / "enforx-policy.json"
         with open(policy_path) as f:
@@ -217,7 +216,9 @@ class FinancialDomainEnforcementEngine:
 
 # ── Standalone test ──────────────────────────────────────────────────────────
 def test_fdee():
-    fdee = FinancialDomainEnforcementEngine(demo_mode=True)
+    import os
+    os.environ["ENFORX_SKIP_MARKET_HOURS"] = "true"
+    fdee = FinancialDomainEnforcementEngine()
 
     plans = [
         # ALLOW

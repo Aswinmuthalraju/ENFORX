@@ -130,24 +130,33 @@ class DeliberationOrchestrator:
 
     def _safe_call(self, agent, sid, grc_prompt, others, round_num) -> dict:
         try:
-            result = agent.deliberate(sid, grc_prompt, others, round_num)
-            # Test hook for scenario 6: degrade only round 2 so leader can OVERRIDE_BLOCK
-            # (all agents degraded in latest round) without forcing ESCALATE first.
-            if sid.get("force_degraded_agents") and round_num == 2:
-                result["confidence"] = 20
-                result["reason"] = "Low confidence due to simulated degraded telemetry."
-                result["source"] = "heuristic_fallback"
-                result["llm_available"] = False
-            return result
-        except Exception as exc:
-            logger.warning("%s round %d failed: %s", agent.NAME, round_num, exc)
+            return agent.deliberate(sid, grc_prompt, others, round_num)
+        except ConnectionError as exc:
+            logger.error("%s round %d: OpenClaw unreachable: %s", agent.NAME, round_num, exc)
             return {
-                "verdict": "MODIFY",
-                "confidence": 20,
-                "reason": f"{agent.NAME} unavailable",
+                "verdict": "ERROR",
+                "confidence": 0,
+                "reason": f"{agent.NAME}: OpenClaw unreachable — {exc}",
+                "source": "error",
                 "suggested_modification": None,
-                "source": "heuristic_fallback",
-                "llm_available": False,
+            }
+        except ValueError as exc:
+            logger.error("%s round %d: bad LLM response: %s", agent.NAME, round_num, exc)
+            return {
+                "verdict": "ERROR",
+                "confidence": 0,
+                "reason": f"{agent.NAME}: invalid LLM response — {exc}",
+                "source": "error",
+                "suggested_modification": None,
+            }
+        except Exception as exc:
+            logger.error("%s round %d failed: %s", agent.NAME, round_num, exc)
+            return {
+                "verdict": "ERROR",
+                "confidence": 0,
+                "reason": f"{agent.NAME}: unexpected error — {exc}",
+                "source": "error",
+                "suggested_modification": None,
             }
 
     def _check_veto(self, risk_result: dict) -> bool:
@@ -158,9 +167,9 @@ class DeliberationOrchestrator:
 
     def _compute_consensus(self, round_results: dict) -> tuple[str, list[str]]:
         verdicts = {
-            "analyst": round_results.get("analyst", {}).get("verdict", "MODIFY").upper(),
-            "risk": round_results.get("risk", {}).get("verdict", "MODIFY").upper(),
-            "compliance": round_results.get("compliance", {}).get("verdict", "MODIFY").upper(),
+            "analyst": round_results.get("analyst", {}).get("verdict", "ERROR").upper(),
+            "risk": round_results.get("risk", {}).get("verdict", "ERROR").upper(),
+            "compliance": round_results.get("compliance", {}).get("verdict", "ERROR").upper(),
         }
         modifications: list[str] = []
         for agent_name, verdict in verdicts.items():
@@ -168,6 +177,10 @@ class DeliberationOrchestrator:
                 mod = round_results.get(agent_name, {}).get("suggested_modification")
                 if mod:
                     modifications.append(mod)
+
+        error_count = sum(1 for v in verdicts.values() if v == "ERROR")
+        if error_count > 0:
+            return "BLOCK", []  # Cannot proceed with errored agents
 
         if any(v == "BLOCK" for v in verdicts.values()):
             return "BLOCK", []
