@@ -46,7 +46,7 @@ def print_layer(num: int, name: str, status: str, detail: str = ""):
         print(f"          +-- {detail}")
 
 
-def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") -> dict:
+def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct", demo_mode: bool = False) -> dict:
     """Run the full 10-layer Enforx pipeline."""
     print_banner()
     print(f"  Input: \"{user_input}\"")
@@ -118,7 +118,7 @@ def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") 
         return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_6", l6)
 
     # --- LAYER 7: Financial Domain Enforcement Engine ---
-    fdee = FinancialDomainEnforcementEngine()
+    fdee = FinancialDomainEnforcementEngine(skip_market_hours=demo_mode)
     l7 = fdee.enforce(plan)
     layer_results["layer7_fdee"] = l7
     print_layer(7, "FDEE — Simplex Safety Controller", l7["status"],
