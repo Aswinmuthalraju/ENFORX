@@ -22,7 +22,7 @@ from core.piav import PlanIntentAlignmentValidator
 from core.ccv import CausalChainValidator
 from core.fdee import FinancialDomainEnforcementEngine
 from core.dap import DelegationAuthorityProtocol
-from audit.audit_loop import AdaptiveAuditLoop
+from audit.cail import CausalAuditIntelligenceLayer
 from alpaca.trader import AlpacaTrader
 
 
@@ -184,21 +184,30 @@ def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") 
             print(f"     Order ID: {execution_result['order_id']}")
         print(f"  {'=' * 61}\n")
 
-    # --- LAYER 10: Adaptive Audit Loop ---
-    audit = AdaptiveAuditLoop()
-    audit_entry = audit.log(
+    # --- LAYER 10: Causal Audit Intelligence Layer (CAIL) ---
+    cail = CausalAuditIntelligenceLayer()
+    audit_entry = cail.log(
         event="TRADE_EXECUTED" if execution_result else "RESEARCH_COMPLETED",
         original_request=user_input,
         sid=sid,
         layer_results=layer_results,
         final_outcome="EXECUTED" if execution_result else "COMPLETED",
         taint_chain=taint_chain,
-        execution_result=execution_result
+        execution_result=execution_result,
+        agent_id=agent_id
     )
-    print_layer(10, "Adaptive Audit Loop", "PASS",
-                f"Audit entry #{audit_entry['entry_id']} | hash: {audit_entry['entry_hash']}")
+    print_layer(10, "Causal Audit Intelligence Layer", "PASS",
+                f"Audit entry #{audit_entry['entry_id']} | Risk Score: {audit_entry['risk_score']}")
 
-    print(f"\n  Counterfactual: {audit_entry['counterfactual']}")
+    print(f"\n  [CAIL Reconstruction] Causal Chain: {' -> '.join(audit_entry['causal_chain']['lineage'])}")
+    print(f"  [CAIL Forensic] Deviation: {audit_entry['deviation_point']}")
+    print(f"  [CAIL Counterfactual] {audit_entry['counterfactual']['explanation']}")
+    
+    if audit_entry["recommendations"]:
+        print(f"\n  [!] SYSTEM SECURITY RECOMMENDATIONS:")
+        for rec in audit_entry["recommendations"]:
+            print(f"      - {rec['target_layer']}: {rec['action']} ({rec['reason']})")
+
     print(f"\n  PIPELINE COMPLETE — All 10 layers passed")
     print("=" * 65 + "\n")
 
@@ -213,7 +222,7 @@ def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") 
 def _finalize(layer_results: dict, original_request: str, sid: dict,
               outcome: str, blocking_result: dict) -> dict:
     """Finalize a blocked pipeline run."""
-    audit = AdaptiveAuditLoop()
+    cail = CausalAuditIntelligenceLayer()
     if not sid:
         sid = {
             "sid_id": "blocked-before-sid",
@@ -221,7 +230,7 @@ def _finalize(layer_results: dict, original_request: str, sid: dict,
             "scope": {},
             "reasoning_bounds": {}
         }
-    audit_entry = audit.log(
+    audit_entry = cail.log(
         event=outcome,
         original_request=original_request,
         sid=sid,
@@ -229,9 +238,12 @@ def _finalize(layer_results: dict, original_request: str, sid: dict,
         final_outcome=outcome,
         taint_chain=[]
     )
-    print_layer(10, "Adaptive Audit Loop", "PASS",
-                f"Blocked run logged | entry #{audit_entry['entry_id']}")
-    print(f"\n  Counterfactual: {audit_entry['counterfactual']}")
+    print_layer(10, "Causal Audit Intelligence Layer", "PASS",
+                f"Blocked run logged | Risk Score: {audit_entry['risk_score']}")
+    
+    print(f"\n  [CAIL Forensic] Deviation: {audit_entry['deviation_point']}")
+    print(f"  [CAIL Counterfactual] {audit_entry['counterfactual']['explanation']}")
+
     print(f"\n  PIPELINE BLOCKED — {outcome}")
     print("=" * 65 + "\n")
     return {
