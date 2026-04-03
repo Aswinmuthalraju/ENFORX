@@ -22,16 +22,19 @@ import hashlib
 import itertools
 import json
 import os
+import tempfile
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from dotenv import load_dotenv
 
 from logger_config import get_layer_logger
 logger = get_layer_logger("layer.10.audit")
 
 
 LOG_PATH = Path(__file__).parent.parent / "enforx_audit.log"
+_POLICY_PATH = Path(__file__).parent.parent / "enforx-policy.json"
+_MULTIPLIER_FLOOR = 0.3
+_MISMATCH_FACTOR = 0.9
 _entry_counter = itertools.count(1)
 
 
@@ -40,9 +43,34 @@ class AdaptiveAuditLoop:
     def __init__(self, log_path: str | Path | None = None):
         self._log_path     = Path(log_path) if log_path else LOG_PATH
         self._prev_hash    = self._load_last_hash()
-        self._sector_flags = defaultdict(int)   # sector → flag count
+        self._sector_flags = defaultdict(int)
         self._last_reset   = datetime.now(timezone.utc)
         self._threshold_multiplier = 1.0
+
+        # Evaluate lazily so env vars from .env are available
+        self._state_path = Path(os.getenv(
+            "ENFORX_AUDIT_STATE_PATH",
+            str(Path(__file__).parent.parent / "logs" / "enforx_audit_state.json"),
+        ))
+
+        # Policy-driven adaptive config (safe defaults if file missing)
+        acfg = self._load_adaptive_config()
+        self._adaptive_enabled      = acfg.get("enabled", True)
+        self._tighten_after_n_flags = acfg.get("tighten_after_n_flags", 3)
+        self._tighten_factor        = acfg.get("tighten_factor", 0.8)
+        self._reset_after_hours     = acfg.get("reset_after_hours", 24)
+        self._log_adjustments       = acfg.get("log_all_adjustments", True)
+
+        state = self._load_state()
+        if state:
+            self._sector_flags.update(state.get("sector_flags", {}))
+            self._threshold_multiplier = float(state.get("threshold_multiplier", 1.0))
+            lr = state.get("last_reset")
+            if lr:
+                try:
+                    self._last_reset = datetime.fromisoformat(lr)
+                except (ValueError, TypeError):
+                    pass
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -64,21 +92,40 @@ class AdaptiveAuditLoop:
         entry_id    = f"audit-{date_str}-{count:04d}"
 
         # Adaptive threshold reset
-        if (now - self._last_reset) > timedelta(hours=24):
+        if (now - self._last_reset) > timedelta(hours=self._reset_after_hours):
             self._sector_flags.clear()
             self._threshold_multiplier = 1.0
             self._last_reset = now
 
         # Update sector flags from CCV results
-        ccv_result = layer_results.get("l6_ccv", {})
-        for flag in ccv_result.get("flags", []):
-            if "SECTOR_CONCENTRATION" in flag:
-                sector = flag.split(":")[1].strip().split(" ")[0] if ":" in flag else "unknown"
-                self._sector_flags[sector] += 1
-                if self._sector_flags[sector] >= 3:
-                    self._threshold_multiplier = round(
-                        self._threshold_multiplier * 0.8, 3
-                    )
+        if self._adaptive_enabled:
+            ccv_result = layer_results.get("l6_ccv", {})
+            for flag in ccv_result.get("flags", []):
+                if "SECTOR_CONCENTRATION" in flag:
+                    sector = flag.split(":")[1].strip().split(" ")[0] if ":" in flag else "unknown"
+                    self._sector_flags[sector] += 1
+                    if self._sector_flags[sector] == self._tighten_after_n_flags:
+                        self._threshold_multiplier = max(
+                            round(self._threshold_multiplier * self._tighten_factor, 3),
+                            _MULTIPLIER_FLOOR,
+                        )
+                        if self._log_adjustments:
+                            logger.warning(
+                                "Sector-flag tightening: %s flagged %d times — multiplier now %s",
+                                sector, self._sector_flags[sector], self._threshold_multiplier,
+                            )
+
+        # Execution verification
+        verification = self._verify_execution(sid, execution_result)
+        if verification["status"] == "MISMATCH":
+            self._threshold_multiplier = max(
+                round(self._threshold_multiplier * _MISMATCH_FACTOR, 3),
+                _MULTIPLIER_FLOOR,
+            )
+            logger.warning(
+                "Execution mismatch detected — tightening thresholds to %s",
+                self._threshold_multiplier,
+            )
 
         # Build deliberation summary
         delib_summary = self._summarize_deliberation(delib_result)
@@ -122,6 +169,7 @@ class AdaptiveAuditLoop:
             "stress_test":       layer_results.get("l6_ccv", {}).get("stress_test"),
             "counterfactual":    counterfactual,
             "execution_result":  execution_result,
+            "execution_verification": verification,
             "adaptive_threshold_multiplier": self._threshold_multiplier,
         }
 
@@ -138,6 +186,8 @@ class AdaptiveAuditLoop:
         with open(self._log_path, "a") as f:
             f.write(json.dumps(entry, default=str) + "\n")
 
+        self._save_state()
+
         return entry
 
     def get_recent_entries(self, n: int = 10) -> list[dict]:
@@ -146,6 +196,98 @@ class AdaptiveAuditLoop:
             return []
         lines = self._log_path.read_text().strip().splitlines()
         return [json.loads(l) for l in lines[-n:] if l.strip()]
+
+    # ── State persistence ─────────────────────────────────────────────────
+
+    def _load_adaptive_config(self) -> dict:
+        """Load adaptive_thresholds section from policy (safe defaults on failure)."""
+        try:
+            with open(_POLICY_PATH) as f:
+                policy = json.load(f)
+            return policy.get("enforx_policy", {}).get("adaptive_thresholds", {})
+        except Exception:
+            return {}
+
+    def _load_state(self) -> dict:
+        """Load adaptive state from disk safely."""
+        try:
+            if self._state_path.exists():
+                return json.loads(self._state_path.read_text())
+        except Exception as exc:
+            logger.warning("Failed to load audit state: %s", exc)
+        return {}
+
+    def _save_state(self) -> None:
+        """Persist adaptive state atomically."""
+        payload = {
+            "sector_flags": {k: v for k, v in self._sector_flags.items() if v},
+            "threshold_multiplier": self._threshold_multiplier,
+            "last_reset": self._last_reset.isoformat(),
+        }
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(
+                dir=str(self._state_path.parent), suffix=".tmp",
+            )
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(payload, f)
+                os.replace(tmp, str(self._state_path))
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+        except Exception as exc:
+            logger.warning("Failed to save audit state: %s", exc)
+
+    # ── Execution verification ─────────────────────────────────────────────
+
+    def _verify_execution(self, sid: dict, execution_result: dict | None) -> dict:
+        """Compare executed trade vs approved SID."""
+        if execution_result is None:
+            return {"status": "UNKNOWN", "issues": ["no_execution_result"]}
+
+        exec_status = execution_result.get("status", "")
+        if exec_status in ("NO_TRADE", "ERROR"):
+            return {"status": "SKIPPED", "issues": [f"execution_status={exec_status}"]}
+
+        issues: list[str] = []
+        scope = sid.get("scope", {})
+        tickers = scope.get("tickers", [])
+        expected_symbol = tickers[0].upper() if tickers else None
+        expected_qty = scope.get("max_quantity")
+        expected_side = scope.get("side")
+
+        actual_symbol = execution_result.get("symbol")
+        actual_qty = execution_result.get("qty")
+        actual_side = execution_result.get("side")
+
+        compared = 0
+        if expected_symbol and actual_symbol:
+            compared += 1
+            if actual_symbol.upper() != expected_symbol:
+                issues.append(f"symbol_mismatch: expected={expected_symbol} actual={actual_symbol}")
+        if expected_qty is not None and actual_qty is not None:
+            compared += 1
+            if int(actual_qty) != int(expected_qty):
+                issues.append(f"qty_mismatch: expected={expected_qty} actual={actual_qty}")
+        if expected_side and actual_side:
+            compared += 1
+            norm_expected = expected_side.lower()
+            norm_actual = actual_side.lower()
+            if "buy" in norm_actual:
+                norm_actual = "buy"
+            elif "sell" in norm_actual:
+                norm_actual = "sell"
+            if norm_actual != norm_expected:
+                issues.append(f"side_mismatch: expected={expected_side} actual={actual_side}")
+
+        if compared == 0:
+            return {"status": "UNVERIFIABLE", "issues": ["no_comparable_fields"]}
+
+        return {"status": "MISMATCH" if issues else "MATCH", "issues": issues}
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 

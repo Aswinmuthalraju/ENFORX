@@ -67,6 +67,16 @@ class CausalChainValidator:
         self._sector_exposure:  dict[str, float] = defaultdict(float)
         self._daily_exposure:   float = 0.0
 
+    # ── Adaptive integration ─────────────────────────────────────────────
+
+    def _get_adaptive_multiplier(self) -> float:
+        """Fetch adaptive multiplier from audit loop (fail-safe=1.0)."""
+        try:
+            from audit import AdaptiveAuditLoop
+            return AdaptiveAuditLoop()._threshold_multiplier
+        except Exception:
+            return 1.0
+
     # ── Public API ──────────────────────────────────────────────────────────
 
     def validate(self, plan: dict, sid: dict, taint_chain: list | None = None) -> dict:
@@ -74,6 +84,9 @@ class CausalChainValidator:
             taint_chain = []
         flags:    list[str] = []
         warnings: list[str] = []
+
+        multiplier = self._get_adaptive_multiplier()
+        logger.info(f"CCV adaptive multiplier applied: {multiplier}")
 
         trade_step = next(
             (s for s in plan.get("plan", []) if s.get("tool") in ("execute_trade", "alpaca_trade")),
@@ -88,6 +101,11 @@ class CausalChainValidator:
         price  = FALLBACK_PRICES.get(symbol, 100.0)
         trade_usd = qty * price
 
+        # Effective limits (adaptive)
+        eff_sector_concentration = self.max_sector_concentration * multiplier
+        eff_trades_per_hour      = self.max_trades_per_hour * multiplier
+        eff_daily_exposure       = self.max_daily_exposure * multiplier
+
         # CHECK 1: Taint chain
         if "UNTRUSTED" in taint_chain:
             flags.append("TAINT_VIOLATION: UNTRUSTED data in causal chain — trade influenced by unverified source")
@@ -97,20 +115,20 @@ class CausalChainValidator:
         total_exp     = self._daily_exposure + trade_usd or 1.0
         sector_exp    = self._sector_exposure.get(sector, 0.0) + trade_usd
         sector_pct    = sector_exp / (self._daily_exposure + trade_usd + 1.0)
-        if sector_pct > self.max_sector_concentration:
+        if sector_pct > eff_sector_concentration:
             flags.append(
                 f"SECTOR_CONCENTRATION: {sector} sector at "
-                f"{sector_pct*100:.1f}% > max {self.max_sector_concentration*100:.0f}%"
+                f"{sector_pct*100:.1f}% > max {eff_sector_concentration*100:.0f}%"
             )
 
         # CHECK 3: Trade velocity (last 60 min)
         now    = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=1)
         recent = [t for t in self._trade_timestamps if t > cutoff]
-        if len(recent) >= self.max_trades_per_hour:
+        if len(recent) >= eff_trades_per_hour:
             flags.append(
                 f"VELOCITY_EXCEEDED: {len(recent)} trades in last hour "
-                f"(max {self.max_trades_per_hour})"
+                f"(max {int(eff_trades_per_hour)})"
             )
 
         # CHECK 4: Tool sequence fingerprint
@@ -130,16 +148,16 @@ class CausalChainValidator:
             )
 
         # CHECK 5: Daily exposure barrier (h3)
-        if self._daily_exposure + trade_usd > self.max_daily_exposure:
+        if self._daily_exposure + trade_usd > eff_daily_exposure:
             flags.append(
                 f"EXPOSURE_BARRIER: projected ${self._daily_exposure + trade_usd:,.0f} "
-                f"> max ${self.max_daily_exposure:,.0f}"
+                f"> max ${eff_daily_exposure:,.0f}"
             )
 
         # CHECK 6: Pre-trade stress test
         stress = None
         if self.stress_enabled:
-            stress = self._stress_test(symbol, qty, price)
+            stress = self._stress_test(symbol, qty, price, multiplier)
             if stress["block"]:
                 return self._block(
                     flags + [f"STRESS_TEST_FAIL: {stress['reason']}"],
@@ -153,11 +171,12 @@ class CausalChainValidator:
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    def _stress_test(self, symbol: str, qty: int, price: float) -> dict:
-        portfolio_value  = DEFAULT_PORTFOLIO_VALUE
-        worst_case_loss  = qty * price * self.worst_case_drop
-        loss_pct         = worst_case_loss / portfolio_value
-        block            = loss_pct > self.max_portfolio_loss
+    def _stress_test(self, symbol: str, qty: int, price: float, multiplier: float = 1.0) -> dict:
+        portfolio_value   = DEFAULT_PORTFOLIO_VALUE
+        worst_case_loss   = qty * price * self.worst_case_drop
+        loss_pct          = worst_case_loss / portfolio_value
+        eff_max_loss      = self.max_portfolio_loss * multiplier
+        block             = loss_pct > eff_max_loss
         return {
             "symbol":            symbol,
             "qty":               qty,
@@ -165,10 +184,10 @@ class CausalChainValidator:
             "worst_case_drop_pct": self.worst_case_drop * 100,
             "worst_case_loss_usd": round(worst_case_loss, 2),
             "portfolio_loss_pct":  round(loss_pct * 100, 3),
-            "max_allowed_pct":     self.max_portfolio_loss * 100,
+            "max_allowed_pct":     eff_max_loss * 100,
             "block":             block,
             "reason":            (
-                f"Worst-case loss {loss_pct*100:.2f}% > allowed {self.max_portfolio_loss*100:.0f}%"
+                f"Worst-case loss {loss_pct*100:.2f}% > allowed {eff_max_loss*100:.0f}%"
                 if block else "Stress test PASSED"
             ),
         }
