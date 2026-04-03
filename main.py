@@ -81,7 +81,8 @@ def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") 
 
     # --- LAYER 3: Guided Reasoning Constraints ---
     grc = GuidedReasoningConstraints()
-    constrained_prompt = grc.build_fence(sid)
+    constrained_prompt = grc.build_fence(sid, l1)
+
     layer_results["layer3_grc"] = {
         "status": "PASS",
         "reason": "Reasoning fence built from SID",
