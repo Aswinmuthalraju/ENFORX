@@ -440,6 +440,66 @@ Layer 3 (GRC) prevents invalid reasoning before it begins — analogous to compi
 
 ---
 
+## Telegram Bot & OpenClaw Tool
+
+### Telegram Bot
+
+The bot wraps `run_pipeline()` so you can send trade commands from Telegram.
+
+**Install dependency:**
+```bash
+pip install python-telegram-bot
+# or: pip install -r requirements.txt
+```
+
+**Configure `.env`:**
+```bash
+TELEGRAM_BOT_TOKEN=<your-bot-token>
+ALLOWED_TELEGRAM_USER_ID=<your-telegram-user-id>   # only this user can interact
+```
+
+**Run:**
+```bash
+source venv/bin/activate
+python telegram_bot.py
+# or:
+make telegram
+```
+
+**Commands in Telegram:**
+| Command | What it does |
+|---------|-------------|
+| `Buy 5 shares of AAPL` | Run a trade command through all 10 layers |
+| `/demo1` | Scenario 1 — valid trade (AAPL passes) |
+| `/demo2` | Scenario 2 — policy block (TSLA, qty=100) |
+| `/demo3` | Scenario 3 — prompt injection blocked at L1 |
+| `/demo4` | Scenario 4 — delegation token breach blocked at L8 |
+| `/demo5` | Scenario 5 — MSFT modified qty 15→10, executes |
+| `/help` | List all commands |
+
+---
+
+### OpenClaw TUI Tool
+
+`openclaw_tool.py` registers ENFORX as an OpenClaw-compatible tool with a `TOOL_MANIFEST` for auto-registration, and also runs standalone from the CLI.
+
+**CLI test (no OpenClaw required):**
+```bash
+source venv/bin/activate
+python openclaw_tool.py "Buy 5 shares of AAPL"
+# or:
+make openclaw
+```
+
+**OpenClaw registration:**
+Point OpenClaw at this file. It will read `TOOL_MANIFEST` and register the `enforx` tool. Inside the TUI:
+```
+> run enforx: Buy 5 shares of AAPL
+> run enforx: Buy 100 shares of TSLA
+```
+
+---
+
 ## License
 
 MIT
