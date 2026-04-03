@@ -1,0 +1,13 @@
+{
+  "name": "enforx-openclaw-plugin",
+  "version": "1.0.0",
+  "description": "ENFORX — 10-layer Causal Integrity Enforcement as an OpenClaw plugin",
+  "type": "module",
+  "main": "index.js",
+  "openclaw": {
+    "extensions": ["./index.js"]
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
