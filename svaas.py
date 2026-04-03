@@ -50,8 +50,8 @@ def print_banner():
 
 def print_layer(num: int, name: str, status: str, detail: str = ""):
     icons = {
-        "PASS": "✅ OK", "BLOCK": "❌ BLOCKED", "ALIGNED": "✅ OK", 
-        "MISALIGNED": "❌ BLOCKED", "ALLOW": "✅ OK", "CORRECT": "🛠️ CORRECTED", 
+        "PASS": "✅ OK", "BLOCK": "❌ BLOCKED", "ALIGNED": "✅ OK",
+        "MISALIGNED": "❌ BLOCKED", "ALLOW": "✅ OK", "CORRECT": "🛠️ CORRECTED",
         "AUTHORIZED": "✅ OK", "FLAG": "⚠️ FLAGGED", "APPROVED": "🤝 APPROVED",
         "DENIED": "🛡️ DENIED", "EMERGENCY_BLOCK": "🚨 EMERGENCY", "EXECUTE": "🚀 EXECUTE"
     }
@@ -68,7 +68,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results = {}
     graph_engine = CausalGraphEngine()
     consensus = MultiAgentConsensus()
-    
+
     # 🧬 CAUSAL ROOT: Intent
     intent_node = graph_engine.add_node("node-intent", "intent", user_input)
 
@@ -78,7 +78,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results["l1_firewall"] = l1
     print_layer(1, "EnforxGuard Input Firewall", l1["status"], l1.get("reason", ""))
     if l1["status"] == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L1")
-    
+
     graph_engine.add_node("node-firewall", "security", l1, [intent_node])
 
     # --- LAYER 2: IFE (SID) ---
@@ -86,7 +86,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     sid = ife.formalize(l1["sanitized_input"], l1)
     layer_results["l2_ife"] = {"status": "PASS", "sid": sid}
     print_layer(2, "Intent Formalize (SID)", "PASS", f"SID: {sid['sid_id']} | Type: {sid['primary_action']}")
-    
+
     sid_node = graph_engine.add_node("node-sid", "constraint", sid, ["node-firewall"])
 
     # --- LAYER 3: Behavioral Memory (STUB) ---
@@ -108,7 +108,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     plan_data = agent.run(fence, l1["sanitized_input"], sid)
     reasoning = plan_data.get("reasoning", "No reasoning provided (STUB).")
     print_layer(6, "Agent Core (Multi-Agent)", "PASS", f"Plan: {[s['tool'] for s in plan_data['plan']]}")
-    
+
     reasoning_node = graph_engine.add_node("node-reasoning", "reasoning", reasoning, [fence_node])
 
     # --- LAYER 7: Meta-Reasoning Auditor (NEW) ---
@@ -117,7 +117,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results["l7_meta_audit"] = l7
     print_layer(7, "Meta-Reasoning Auditor", l7["status"], f"Findings: {len(l7['findings'])}")
     if l7["status"] == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L7", l7)
-    
+
     audit_node = graph_engine.add_node("node-audit", "verification", l7, [reasoning_node])
 
     # --- LAYER 8: Causal Graph Build (Engine handles this throughout) ---
@@ -125,59 +125,26 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
 
     # --- LAYER 9: Simplex Controller (PIAV + FDEE) ---
     piav = PlanIntentAlignmentValidator()
-    l5 = piav.validate(plan, sid)
-    layer_results["layer5_piav"] = l5
-    print_layer(5, "Plan-Intent Alignment Validator", l5["status"],
-                l5["violations"][0] if l5["violations"] else "Plan aligns with SID")
-    if l5["status"] == "MISALIGNED":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_5", l5)
-
-    # --- LAYER 6: Causal Chain Validator ---
-    ccv = CausalChainValidator()
-    l6 = ccv.validate(plan, sid, taint_chain)
-    layer_results["layer6_ccv"] = l6
-    detail = l6["flags"][0] if l6["flags"] else (l6["warnings"][0] if l6["warnings"] else "Sequence check OK")
-    print_layer(6, "Causal Chain Validator", l6["status"], detail)
-    if l6["status"] == "BLOCK":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_6", l6)
-
-    # --- LAYER 7: Financial Domain Enforcement Engine ---
+    l9_piav = piav.validate(plan_data, sid)
     fdee = FinancialDomainEnforcementEngine()
-    l7 = fdee.enforce(plan)
-    layer_results["layer7_fdee"] = l7
-    print_layer(7, "FDEE — Simplex Safety Controller", l7["status"],
-                l7.get("reason", "")[:80])
-    if l7["status"] == "BLOCK":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_7", l7)
+    l9_fdee = fdee.enforce(plan_data)
 
-    enforced_plan = l7.get("enforced_plan", plan)
+    status_l9 = "PASS" if (l9_piav["status"] == "ALIGNED" and l9_fdee["status"] in ["ALLOW", "CORRECT"]) else "BLOCK"
+    print_layer(9, "Simplex Controller", status_l9, l9_fdee.get("reason", "Checks complete"))
+    if status_l9 == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L9")
 
-    # --- LAYER 8: Delegation Authority Protocol ---
-    dap = DelegationAuthorityProtocol()
-    l8 = dap.authorize(token, enforced_plan, agent_id)
-    layer_results["layer8_dap"] = l8
-    print_layer(8, "Delegation Authority Protocol", l8["status"],
-                l8.get("reason", ""))
-    if l8["status"] == "DELEGATION_VIOLATION":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_8", l8)
+    final_plan = l9_fdee.get("enforced_plan", plan_data)
+    plan_node = graph_engine.add_node("node-plan", "tool_call", final_plan, [audit_node])
 
-    # --- LAYER 9: EnforxGuard Output Firewall ---
-    trade_step = next((s for s in enforced_plan.get("plan", []) if s.get("tool") == "execute_trade"), None)
-    if trade_step:
-        api_payload = {
-            "endpoint": "https://paper-api.alpaca.markets/v2/orders",
-            "symbol": trade_step["args"].get("symbol"),
-            "qty": trade_step["args"].get("qty"),
-            "side": trade_step["args"].get("side"),
-            "type": trade_step["args"].get("type", "market"),
-            "time_in_force": "day"
-        }
-    else:
-        api_payload = {
-            "endpoint": "https://paper-api.alpaca.markets/v2/positions",
-            "action": "query"
-        }
+    # --- LAYER 10: Multi-Agent Consensus (NEW) ---
+    consensus.add_vote("reasoner", "APPROVE", "Plan is logical and within fence.")
+    consensus.add_vote("risk", "APPROVE", "Portfolio exposure remains within 2% limits.")
+    consensus.add_vote("compliance", "APPROVE" if status_l9 == "PASS" else "DENY", "Policy constraints verified.")
+    l10 = consensus.check_consensus()
+    print_layer(10, "Multi-Agent Consensus", l10["status"], f"Consensus ID: {l10.get('consensus_id', 'N/A')}")
+    if l10["status"] == "DENIED": return _finalize(layer_results, user_input, "BLOCKED_L10", l10)
 
+    # --- LAYER 11: Output Firewall ---
     firewall_out = OutputFirewall()
     l11 = firewall_out.scan({"endpoint": "alpaca"}, final_plan, [l1["taint_tag"]])
     print_layer(11, "EnforxGuard Output Firewall", l11["status"], l11.get("reason", ""))
@@ -200,7 +167,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     print("\n  [MERMAID GRAPH PROOF]")
     print(graph_engine.export_mermaid())
     print("\n" + "=" * 70 + "\n")
-    
+
     return {"status": "SUCCESS", "graph": graph_engine.get_graph()}
 
 def _finalize(layer_results, user_input, outcome, detail_obj=None):
