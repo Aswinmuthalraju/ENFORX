@@ -15,6 +15,7 @@ Loads enforx-policy.json and evaluates every trade against hard rules.
 Can ALLOW, CORRECT (fix soft violations), or BLOCK (hard violations).
 """
 
+from __future__ import annotations
 import json
 import re
 from pathlib import Path
@@ -23,8 +24,8 @@ import pytz
 
 
 class FinancialDomainEnforcementEngine:
-    def __init__(self, policy_path: str = None, skip_market_hours: bool = False):
-        self._skip_market_hours = skip_market_hours
+    def __init__(self, policy_path: str = None, skip_market_hours: bool = False, demo_mode: bool = False):
+        self._skip_market_hours = skip_market_hours or demo_mode
         if policy_path is None:
             policy_path = Path(__file__).parent.parent / "enforx-policy.json"
         with open(policy_path) as f:

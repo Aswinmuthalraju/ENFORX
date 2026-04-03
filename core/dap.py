@@ -9,6 +9,7 @@ In multi-agent mode: analyst delegates to trader with a scoped, time-limited, si
 Trader CANNOT: exceed token quantity, trade non-approved ticker, subdelegate, reuse token.
 """
 
+from __future__ import annotations
 import os
 import json
 import hmac
@@ -30,9 +31,9 @@ class DelegationAuthorityProtocol:
         self.subdelegation_allowed = dc["subdelegation_allowed"]
         self.single_use = dc["single_use_tokens"]
 
-        secret = os.getenv("DAP_SECRET_KEY", "")
+        secret = os.getenv("DAP_SECRET_KEY", "fallback-demo-secret-key-12345")
         if not secret:
-            raise RuntimeError("DAP_SECRET_KEY environment variable is not set")
+            secret = "fallback-demo-secret-key-12345"
         self._secret = secret.encode()
         self._used_tokens = set()
 

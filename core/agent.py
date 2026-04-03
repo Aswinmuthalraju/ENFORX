@@ -26,7 +26,9 @@ class AgentCore:
         if sid.get("primary_action") == "research_only" or "execute_trade" not in sid.get("permitted_actions", []):
             return {
                 "plan": [
-                    {"tool": "query_market_data", "args": {"ticker": ticker}, "step": 1}
+                    {"tool": "query_market_data", "args": {"ticker": ticker}, "step": 1},
+                    {"tool": "analyze_sentiment", "args": {"ticker": ticker}, "step": 2},
+                    {"tool": "verify_constraints", "args": {"ticker": ticker}, "step": 3}
                 ],
                 "csrg_proof": f"STUB_PROOF_{sid_id}",
                 "reasoning_trace": (
@@ -41,6 +43,8 @@ class AgentCore:
         return {
             "plan": [
                 {"tool": "query_market_data", "args": {"ticker": ticker}, "step": 1},
+                {"tool": "analyze_sentiment", "args": {"ticker": ticker}, "step": 2},
+                {"tool": "verify_constraints", "args": {"ticker": ticker}, "step": 3},
                 {
                     "tool": "execute_trade",
                     "args": {
@@ -49,7 +53,7 @@ class AgentCore:
                         "side": side if side in ["buy", "sell"] else "buy",
                         "type": order_type if order_type in ["market", "limit"] else "market"
                     },
-                    "step": 2
+                    "step": 4
                 }
             ],
             "csrg_proof": f"STUB_PROOF_{sid_id}",

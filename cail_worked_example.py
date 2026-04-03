@@ -4,6 +4,7 @@ This script demonstrates the Causal Audit Intelligence Layer (CAIL) in action
 by simulating a trade that requires correction and showing the intelligence output.
 """
 
+from __future__ import annotations
 from main import run_pipeline
 import json
 import os

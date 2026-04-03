@@ -5,6 +5,7 @@ Uses LLM (via openai SDK) to parse intent into structured JSON.
 PRINCIPLE: When in doubt, restrict. False negatives are catastrophic in finance.
 """
 
+from __future__ import annotations
 import os
 import json
 import hashlib
@@ -158,18 +159,18 @@ RULES:
 
         sub_action = "none"
         primary_action = "research"
-        permitted = ["query_market_data"]
+        permitted = ["query_market_data", "analyze_sentiment", "verify_constraints"]
         if any(w in lower for w in ["buy", "purchase", "long"]):
             sub_action = "buy"
             primary_action = "trade"
-            permitted = ["execute_trade", "query_market_data"]
+            permitted = ["execute_trade", "query_market_data", "analyze_sentiment", "verify_constraints"]
         elif any(w in lower for w in ["sell", "short", "dump"]):
             sub_action = "sell"
             primary_action = "trade"
-            permitted = ["execute_trade", "query_market_data"]
+            permitted = ["execute_trade", "query_market_data", "analyze_sentiment", "verify_constraints"]
         elif any(w in lower for w in ["research", "analyze", "check", "look"]):
             primary_action = "research"
-            permitted = ["query_market_data"]
+            permitted = ["query_market_data", "analyze_sentiment", "verify_constraints"]
 
         tickers = [t for t in self.allowed_tickers if t.lower() in lower]
         all_known_tickers = ["TSLA", "META", "NFLX", "BABA", "UBER", "LYFT", "SNAP", "TWTR", "AMD", "INTC"]
@@ -205,7 +206,7 @@ RULES:
 
         if not any(w in lower for w in ["buy", "purchase", "sell", "short"]) and primary_action == "trade":
             primary_action = "research_only"
-            permitted = ["query_market_data"]
+            permitted = ["query_market_data", "analyze_sentiment", "verify_constraints"]
 
         ticker_str = tickers[0] if tickers else "unknown"
         allowed_topics = [f"{ticker_str} price", f"{ticker_str} market data", "order execution"] if tickers else ["market research"]

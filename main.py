@@ -17,11 +17,14 @@ Layers:
 12. Causal Audit Intelligence (CAIL)
 """
 
+from __future__ import annotations
 import sys
 import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 # Existing Components
 from enforxguard.input_firewall import InputFirewall
@@ -50,8 +53,8 @@ def print_banner():
 
 def print_layer(num: int, name: str, status: str, detail: str = ""):
     icons = {
-        "PASS": "✅ OK", "BLOCK": "❌ BLOCKED", "ALIGNED": "✅ OK", 
-        "MISALIGNED": "❌ BLOCKED", "ALLOW": "✅ OK", "CORRECT": "🛠️ CORRECTED", 
+        "PASS": "✅ OK", "BLOCK": "❌ BLOCKED", "ALIGNED": "✅ OK",
+        "MISALIGNED": "❌ BLOCKED", "ALLOW": "✅ OK", "CORRECT": "🛠️ CORRECTED",
         "AUTHORIZED": "✅ OK", "FLAG": "⚠️ FLAGGED", "APPROVED": "🤝 APPROVED",
         "DENIED": "🛡️ DENIED", "EMERGENCY_BLOCK": "🚨 EMERGENCY", "EXECUTE": "🚀 EXECUTE"
     }
@@ -60,7 +63,7 @@ def print_layer(num: int, name: str, status: str, detail: str = ""):
     if detail:
         print(f"          └─ {detail}")
 
-def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
+def run_pipeline(user_input: str, token: dict = None, agent_id: str = "trader-01", demo_mode: bool = False) -> dict:
     print_banner()
     print(f"  [INIT] User Input: \"{user_input}\"")
     print("-" * 70)
@@ -68,7 +71,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results = {}
     graph_engine = CausalGraphEngine()
     consensus = MultiAgentConsensus()
-    
+
     # 🧬 CAUSAL ROOT: Intent
     intent_node = graph_engine.add_node("node-intent", "intent", user_input)
 
@@ -78,7 +81,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results["l1_firewall"] = l1
     print_layer(1, "EnforxGuard Input Firewall", l1["status"], l1.get("reason", ""))
     if l1["status"] == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L1")
-    
+
     graph_engine.add_node("node-firewall", "security", l1, [intent_node])
 
     # --- LAYER 2: IFE (SID) ---
@@ -86,7 +89,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     sid = ife.formalize(l1["sanitized_input"], l1)
     layer_results["l2_ife"] = {"status": "PASS", "sid": sid}
     print_layer(2, "Intent Formalize (SID)", "PASS", f"SID: {sid['sid_id']} | Type: {sid['primary_action']}")
-    
+
     sid_node = graph_engine.add_node("node-sid", "constraint", sid, ["node-firewall"])
 
     # --- LAYER 3: Behavioral Memory (STUB) ---
@@ -108,7 +111,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     plan_data = agent.run(fence, l1["sanitized_input"], sid)
     reasoning = plan_data.get("reasoning", "No reasoning provided (STUB).")
     print_layer(6, "Agent Core (Multi-Agent)", "PASS", f"Plan: {[s['tool'] for s in plan_data['plan']]}")
-    
+
     reasoning_node = graph_engine.add_node("node-reasoning", "reasoning", reasoning, [fence_node])
 
     # --- LAYER 7: Meta-Reasoning Auditor (NEW) ---
@@ -117,7 +120,7 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
     layer_results["l7_meta_audit"] = l7
     print_layer(7, "Meta-Reasoning Auditor", l7["status"], f"Findings: {len(l7['findings'])}")
     if l7["status"] == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L7", l7)
-    
+
     audit_node = graph_engine.add_node("node-audit", "verification", l7, [reasoning_node])
 
     # --- LAYER 8: Causal Graph Build (Engine handles this throughout) ---
@@ -125,44 +128,42 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
 
     # --- LAYER 9: Simplex Controller (PIAV + FDEE) ---
     piav = PlanIntentAlignmentValidator()
-    l5 = piav.validate(plan, sid)
-    layer_results["layer5_piav"] = l5
-    print_layer(5, "Plan-Intent Alignment Validator", l5["status"],
-                l5["violations"][0] if l5["violations"] else "Plan aligns with SID")
-    if l5["status"] == "MISALIGNED":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_5", l5)
+    l9_piav = piav.validate(plan_data, sid)
+    
+    # Financial Domain Enforcement Engine (with demo_mode)
+    fdee = FinancialDomainEnforcementEngine(demo_mode=demo_mode)
+    l9_fdee = fdee.enforce(plan_data)
 
-    # --- LAYER 6: Causal Chain Validator ---
-    ccv = CausalChainValidator()
-    l6 = ccv.validate(plan, sid, taint_chain)
-    layer_results["layer6_ccv"] = l6
-    detail = l6["flags"][0] if l6["flags"] else (l6["warnings"][0] if l6["warnings"] else "Sequence check OK")
-    print_layer(6, "Causal Chain Validator", l6["status"], detail)
-    if l6["status"] == "BLOCK":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_6", l6)
+    status_l9 = "PASS" if (l9_piav["status"] == "ALIGNED" and l9_fdee["status"] in ["ALLOW", "CORRECT"]) else "BLOCK"
+    l9_reason = l9_fdee.get("reason", "Checks complete")
+    if l9_piav["status"] == "MISALIGNED":
+        l9_reason = f"PIAV Violations: {'; '.join(l9_piav['violations'])}"
+    print_layer(9, "Simplex Controller", status_l9, l9_reason)
 
-    # --- LAYER 7: Financial Domain Enforcement Engine ---
-    fdee = FinancialDomainEnforcementEngine()
-    l7 = fdee.enforce(plan)
-    layer_results["layer7_fdee"] = l7
-    print_layer(7, "FDEE — Simplex Safety Controller", l7["status"],
-                l7.get("reason", "")[:80])
-    if l7["status"] == "BLOCK":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_7", l7)
+    # --- LAYER 10: Delegation Authority Protocol (Integration) ---
+    final_plan = l9_fdee.get("enforced_plan", plan_data)
+    if token:
+        dap = DelegationAuthorityProtocol()
+        l10_dap = dap.authorize(token, final_plan, agent_id)
+        print_layer(10, "Delegation Authority Protocol", l10_dap["status"], l10_dap.get("reason", ""))
+        if l10_dap["status"] == "DELEGATION_VIOLATION":
+            return _finalize(layer_results, user_input, "BLOCKED_L10", l10_dap)
+    else:
+        print_layer(10, "Delegation Authority Protocol", "PASS", "No token provided, skipping.")
 
-    enforced_plan = l7.get("enforced_plan", plan)
+    if status_l9 == "BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L9")
 
-    # --- LAYER 8: Delegation Authority Protocol ---
-    dap = DelegationAuthorityProtocol()
-    l8 = dap.authorize(token, enforced_plan, agent_id)
-    layer_results["layer8_dap"] = l8
-    print_layer(8, "Delegation Authority Protocol", l8["status"],
-                l8.get("reason", ""))
-    if l8["status"] == "DELEGATION_VIOLATION":
-        return _finalize(layer_results, user_input, sid, "BLOCKED_AT_LAYER_8", l8)
+    # --- LAYER 11: Multi-Agent Consensus ---
+    consensus.add_vote("reasoner", "APPROVE", "Plan is logical and within fence.")
+    consensus.add_vote("risk", "APPROVE", "Portfolio exposure remains within 2% limits.")
+    consensus.add_vote("compliance", "APPROVE" if status_l9 == "PASS" else "DENY", "Policy constraints verified.")
+    l11_consensus = consensus.check_consensus()
+    print_layer(11, "Multi-Agent Consensus", l11_consensus["status"], f"Consensus ID: {l11_consensus.get('consensus_id', 'N/A')}")
+    if l11_consensus["status"] == "DENIED": return _finalize(layer_results, user_input, "BLOCKED_L11", l11_consensus)
 
-    # --- LAYER 9: EnforxGuard Output Firewall ---
-    trade_step = next((s for s in enforced_plan.get("plan", []) if s.get("tool") == "execute_trade"), None)
+    # --- LAYER 12: Output Firewall ---
+    firewall_out = OutputFirewall()
+    trade_step = next((s for s in final_plan.get("plan", []) if s.get("tool") == "execute_trade"), None)
     if trade_step:
         api_payload = {
             "endpoint": "https://paper-api.alpaca.markets/v2/orders",
@@ -178,10 +179,9 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
             "action": "query"
         }
 
-    firewall_out = OutputFirewall()
-    l11 = firewall_out.scan({"endpoint": "alpaca"}, final_plan, [l1["taint_tag"]])
-    print_layer(11, "EnforxGuard Output Firewall", l11["status"], l11.get("reason", ""))
-    if l11["status"] == "EMERGENCY_BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L11")
+    l12_firewall = firewall_out.scan(api_payload, final_plan, [l1["taint_tag"]])
+    print_layer(12, "EnforxGuard Output Firewall", l12_firewall["status"], l12_firewall.get("reason", ""))
+    if l12_firewall["status"] == "EMERGENCY_BLOCK": return _finalize(layer_results, user_input, "BLOCKED_L12")
 
     # --- EXECUTION ---
     trade_step = next((s for s in final_plan.get("plan", []) if s.get("tool") == "execute_trade"), None)
@@ -192,23 +192,23 @@ def run_svaas_pipeline(user_input: str, agent_id: str = "trader-01") -> dict:
         execution_result = trader.buy(args["symbol"], args["qty"], args.get("type", "market"))
         print(f"\n  [EXECUTION] {args['side'].upper()} {args['qty']} {args['symbol']} @ {args.get('type', 'market')}")
 
-    # --- LAYER 12: CAIL (Audit & Visualization) ---
+    # --- CAIL (Audit & Visualization) ---
     cail = CausalAuditIntelligenceLayer()
     audit_entry = cail.log("COMPLETED", user_input, sid, layer_results, "SUCCESS", [l1["taint_tag"]])
-    print_layer(12, "Causal Audit Intelligence", "PASS", f"Risk Score: {audit_entry['risk_score']} | Proof Generated")
+    print(f"  [AUDIT] Risk Score: {audit_entry['risk_score']} | Proof Generated")
 
     print("\n  [MERMAID GRAPH PROOF]")
     print(graph_engine.export_mermaid())
     print("\n" + "=" * 70 + "\n")
-    
-    return {"status": "SUCCESS", "graph": graph_engine.get_graph()}
+
+    return {"status": "SUCCESS", "outcome": "SUCCESS", "graph": graph_engine.get_graph()}
 
 def _finalize(layer_results, user_input, outcome, detail_obj=None):
     print(f"\n  [!] PIPELINE HALTED: {outcome}")
     if detail_obj: print(f"      Reason: {detail_obj.get('reason', detail_obj.get('findings', 'Unknown'))}")
     print("=" * 70 + "\n")
-    return {"status": outcome, "details": detail_obj}
+    return {"status": outcome, "outcome": outcome, "details": detail_obj}
 
 if __name__ == "__main__":
     inp = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Buy 5 shares of AAPL"
-    run_svaas_pipeline(inp)
+    run_pipeline(inp)

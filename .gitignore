@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -8,13 +9,22 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.build/
 .eggs/
 
-# Environment
+# Environment — NEVER commit secrets
 .env
 .env.local
 .env.*.local
+
+# Virtual environments
 venv/
+.venv/
+env/
+ENV/
+
+# Node (if any frontend tooling is added)
+node_modules/
 
 # IDE / OS
 .DS_Store
@@ -27,8 +37,14 @@ Thumbs.db
 # Claude Code local settings
 .claude/
 
-# Runtime output
+# Runtime output / audit logs
 audit/logs/
+enforx_audit.log
+output.txt
+output2.txt
+output3.txt
+test_results.txt
+*.log
 
 # Distribution
 *.whl

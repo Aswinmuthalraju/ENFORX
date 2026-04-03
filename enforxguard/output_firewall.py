@@ -4,6 +4,7 @@ Full outbound threat defense. Last gate before Alpaca API call.
 Mirrors Layer 1 logic but for outbound payloads.
 """
 
+from __future__ import annotations
 import re
 import json
 from pathlib import Path

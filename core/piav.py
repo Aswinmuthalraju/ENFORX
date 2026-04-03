@@ -52,7 +52,7 @@ class FormalPlanVerificationEngine:
         if v1["failed"]: failed_checks.append("STRUCTURAL")
 
         # 2. Sequence-Level Validation
-        v2 = self._validate_sequence(plan_data)
+        v2 = self._validate_sequence(plan_data, sid)
         violations.extend(v2["violations"])
         if v2["failed"]: failed_checks.append("SEQUENCE")
 
@@ -137,12 +137,14 @@ class FormalPlanVerificationEngine:
         
         return {"failed": len(violations) > 0, "violations": violations}
 
-    def _validate_sequence(self, plan_data: dict) -> dict:
+    def _validate_sequence(self, plan_data: dict, sid: dict = None) -> dict:
         violations = []
         plan_steps = plan_data.get("plan", [])
         plan_categories = [self.tool_to_category.get(s.get("tool", ""), "unknown") for s in plan_steps]
         
-        required_seq = self.causal_constraints.get("required_tool_sequence", [])
+        required_seq = list(self.causal_constraints.get("required_tool_sequence", []))
+        if sid and sid.get("primary_action") == "research_only" and "trade" in required_seq:
+            required_seq.remove("trade")
         
         # Filter out "unknown" for sequence check
         relevant_categories = [c for c in plan_categories if c != "unknown"]

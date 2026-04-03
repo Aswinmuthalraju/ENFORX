@@ -5,6 +5,7 @@ Every input is scanned and tagged before the agent sees it.
 Inspired by IFC/taint tracking from FIDES framework (Costa & Kopf, 2025).
 """
 
+from __future__ import annotations
 import re
 import json
 import hashlib
