@@ -1,0 +1,107 @@
+{
+  "enforx_policy": {
+    "version": "2.0",
+    "created": "2026-04-03",
+
+    "trade_constraints": {
+      "max_per_order": 10,
+      "max_daily_volume": 50,
+      "max_daily_exposure_usd": 5000,
+      "allowed_tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+      "allowed_order_types": ["market", "limit"],
+      "prohibited_actions": ["short_sell", "margin_trade", "options"]
+    },
+
+    "time_constraints": {
+      "market_hours_only": true,
+      "market_open": "09:30",
+      "market_close": "16:00",
+      "timezone": "America/New_York",
+      "earnings_blackout": {
+        "enabled": true,
+        "window_hours_before": 24,
+        "window_hours_after": 2
+      }
+    },
+
+    "data_constraints": {
+      "allowed_read_dirs": ["/data/market", "/data/reports", "/data/earnings"],
+      "allowed_write_dirs": ["/output/reports", "/output/logs"],
+      "prohibited_transmit_external": true,
+      "pii_detection": true,
+      "credential_detection": true,
+      "blocked_patterns": ["api_key", "password", "secret", "token", "ssn", "account_number"],
+      "trust_levels": {
+        "user_input": "TRUSTED",
+        "alpaca_api": "VERIFIED",
+        "web_search": "SEMI_TRUSTED",
+        "file_content": "UNTRUSTED",
+        "agent_generated": "DERIVED"
+      },
+      "taint_policy": "block_trade_if_untrusted_in_chain"
+    },
+
+    "tool_constraints": {
+      "allow": ["web_search", "web_fetch", "read_file", "write_file", "alpaca_trade"],
+      "deny": ["bash", "exec", "shell", "curl", "wget", "ssh"]
+    },
+
+    "causal_chain_constraints": {
+      "max_sector_concentration_pct": 60,
+      "max_trades_per_hour": 10,
+      "velocity_anomaly_threshold": 3,
+      "required_tool_sequence": ["research", "analyze", "validate", "trade"],
+      "stress_test": {
+        "enabled": true,
+        "worst_case_drop_pct": 20,
+        "max_worst_case_portfolio_loss_pct": 15,
+        "check_cumulative_exposure": true
+      }
+    },
+
+    "delegation_constraints": {
+      "allowed_delegations": {
+        "analyst": {"can_delegate_to": ["trader"], "max_authority": {"shares": 10}},
+        "risk": {"can_delegate_to": [], "max_authority": {}},
+        "trader": {"can_delegate_to": [], "max_authority": {}}
+      },
+      "token_expiry_seconds": 60,
+      "subdelegation_allowed": false,
+      "single_use_tokens": true
+    },
+
+    "enforxguard_rules": {
+      "input_firewall": {
+        "injection_patterns": [
+          "ignore previous", "ignore all rules", "disregard instructions",
+          "override policy", "system prompt", "you are now",
+          "act as if", "pretend that", "forget your instructions",
+          "new instructions", "developer mode", "jailbreak",
+          "ignore previous rules", "disregard all", "bypass",
+          "ignore all previous", "new objective", "your true purpose"
+        ],
+        "max_input_length": 2000,
+        "block_external_urls_in_input": true,
+        "rate_limit_per_minute": 30,
+        "encoding_attack_detection": true,
+        "block_base64_payloads": true
+      },
+      "output_firewall": {
+        "block_pii_in_output": true,
+        "block_credentials_in_output": true,
+        "verify_output_matches_plan": true,
+        "allowed_api_endpoints": ["https://paper-api.alpaca.markets"],
+        "max_payload_size_bytes": 10240,
+        "block_redirects": true
+      }
+    },
+
+    "adaptive_thresholds": {
+      "enabled": true,
+      "tighten_after_n_flags": 3,
+      "tighten_factor": 0.8,
+      "reset_after_hours": 24,
+      "log_all_adjustments": true
+    }
+  }
+}
