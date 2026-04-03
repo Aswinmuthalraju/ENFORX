@@ -8,6 +8,8 @@ import re
 import json
 from pathlib import Path
 from datetime import datetime, timezone
+from .semantic_rails import SemanticScanner
+
 
 
 class OutputFirewall:
@@ -20,6 +22,8 @@ class OutputFirewall:
         self.allowed_endpoints = rules["allowed_api_endpoints"]
         self.max_payload_bytes = rules["max_payload_size_bytes"]
         self.blocked_patterns = policy["enforx_policy"]["data_constraints"]["blocked_patterns"]
+        self.semantic_scanner = SemanticScanner()
+
 
     def scan(self, api_payload: dict, validated_plan: dict, taint_chain: list) -> dict:
         """
@@ -84,9 +88,17 @@ class OutputFirewall:
         if redirect_result:
             checks_failed.append("REDIRECT_DETECTED")
             return self._block(redirect_result, checks_passed, checks_failed)
-        checks_passed.append("NO_REDIRECTS")
+        # CHECK 8: Semantic alignment — plan vs user intent
+        user_intent = api_payload.get("user_intent", "")
+        if user_intent:
+            semantic_result = self.semantic_scanner.verify_plan_consistency(validated_plan, user_intent)
+            if semantic_result["status"] == "MISALIGNED":
+                checks_failed.append("SEMANTIC_MISALIGNMENT")
+                return self._block(semantic_result["reason"], checks_passed, checks_failed)
+            checks_passed.append("SEMANTIC_ALIGNED")
 
         return {
+
             "status": "EXECUTE",
             "reason": f"All {len(checks_passed)} output firewall checks passed",
             "checks_passed": checks_passed,
@@ -153,7 +165,22 @@ class OutputFirewall:
                 items.append((full_key, v))
         return items
 
+    def scan_tool_output(self, tool_name: str, output: str) -> dict:
+        """Scan data returned by a tool for malicious payloads (Execution Rail)."""
+        # 1. Regex check for injection in tool output
+        for pattern in ["ignore previous", "system prompt", "override policy"]:
+            if pattern in output.lower():
+                return {"status": "BLOCK", "reason": f"Injection pattern '{pattern}' found in {tool_name} output"}
+        
+        # 2. Semantic check for malicious content
+        semantic_result = self.semantic_scanner.analyze_input(output)
+        if semantic_result["status"] == "BLOCK":
+            return {"status": "BLOCK", "reason": f"Semantic threat in {tool_name} output: {semantic_result['reason']}"}
+        
+        return {"status": "PASS", "reason": f"{tool_name} output verified"}
+
     def _block(self, reason: str, passed: list, failed: list) -> dict:
+
         return {
             "status": "EMERGENCY_BLOCK",
             "reason": reason,

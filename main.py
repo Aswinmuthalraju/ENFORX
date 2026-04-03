@@ -38,8 +38,10 @@ def print_layer(num: int, name: str, status: str, detail: str = ""):
         "PASS": "OK", "BLOCK": "BLOCKED", "ALIGNED": "OK", "MISALIGNED": "BLOCKED",
         "ALLOW": "OK", "CORRECT": "CORRECTED", "AUTHORIZED": "OK",
         "DELEGATION_VIOLATION": "BLOCKED", "EXECUTE": "OK", "EMERGENCY_BLOCK": "BLOCKED",
-        "FLAG": "FLAGGED"
+        "FLAG": "FLAGGED", "ALIGNED": "OK", "MISALIGNED": "BLOCKED", "SEMANTIC_ALIGNED": "OK",
+        "SEMANTIC_MISALIGNMENT": "BLOCKED"
     }
+
     icon = icons.get(status, "INFO")
     print(f"  Layer {num:2d} | [{icon:9s}] {status:25s} | {name}")
     if detail:
@@ -153,8 +155,11 @@ def run_pipeline(user_input: str, token: dict = None, agent_id: str = "direct") 
             "endpoint": "https://paper-api.alpaca.markets/v2/positions",
             "action": "query"
         }
+    
+    api_payload["user_intent"] = l1["sanitized_input"]
 
     firewall_out = OutputFirewall()
+
     l9 = firewall_out.scan(api_payload, enforced_plan, taint_chain)
     layer_results["layer9_output_firewall"] = l9
     print_layer(9, "EnforxGuard Output Firewall", l9["status"],

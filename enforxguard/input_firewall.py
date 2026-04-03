@@ -11,6 +11,8 @@ import hashlib
 from pathlib import Path
 from collections import deque
 from datetime import datetime, timezone
+from .semantic_rails import SemanticScanner
+
 
 
 class InputFirewall:
@@ -28,6 +30,8 @@ class InputFirewall:
 
         # Rate limiting: store timestamps of last N calls
         self._call_times = deque()
+        self.semantic_scanner = SemanticScanner()
+
 
     def scan(self, user_input: str, source: str = "user_input") -> dict:
         """
@@ -36,10 +40,19 @@ class InputFirewall:
         """
         raw = user_input
 
+        # CHECK 0: Semantic Scan (LLM-based)
+        semantic_result = self.semantic_scanner.analyze_input(user_input)
+        if semantic_result["status"] == "BLOCK":
+            return self._block(raw, semantic_result["threat_type"], semantic_result["reason"], source)
+        
+        # Self-correction: use sanitized text from semantic scanner if available
+        user_input = semantic_result.get("sanitized_text", user_input)
+
         # CHECK 1: Length
         if len(user_input) > self.max_length:
             return self._block(raw, "LENGTH_EXCEEDED",
                 f"Input length {len(user_input)} exceeds maximum {self.max_length}", source)
+
 
         # CHECK 2: Rate limiting
         now = datetime.now(timezone.utc).timestamp()
@@ -84,8 +97,10 @@ class InputFirewall:
             "sanitized_input": sanitized,
             "raw_input": raw,
             "source": source,
-            "checks_run": 6,
+            "checks_run": 7,
+            "semantic_scan_reason": semantic_result.get("reason"),
             "timestamp": datetime.now(timezone.utc).isoformat()
+
         }
 
     def _detect_encoding_attacks(self, text: str) -> str | None:
