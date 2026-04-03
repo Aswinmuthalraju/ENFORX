@@ -161,7 +161,7 @@ cp .env.example .env
 # Then edit .env with your actual API keys (see section below)
 ```
 
-### OpenClaw + AntiGravity Configuration
+### OpenClaw + VSCode Configuration
 
 ENFORX routes all LLM inference through the **OpenClaw gateway** (with **AntiGravity / ArmorClaw** plugin for CSRG proof generation).
 
