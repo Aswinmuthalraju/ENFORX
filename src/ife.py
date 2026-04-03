@@ -16,15 +16,15 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-import logging
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 from llm_client import OpenClawClient
+from logger_config import get_layer_logger
 
-logger = logging.getLogger(__name__)
+logger = get_layer_logger("layer.02.ife")
 
 # Ordered list of (pattern, ticker) for rule-based extraction
 _TICKER_RE = re.compile(

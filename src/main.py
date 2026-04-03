@@ -23,11 +23,15 @@ import os
 from pathlib import Path
 from datetime import datetime, timezone
 
-# Ensure src/ is on the path when called from project root
+# Ensure src/ and root are on the path when called from project root
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
+
+from logger_config import setup_logging, log_layer_result
+setup_logging()
 
 from enforxguard_input   import InputFirewall
 from ife                 import IntentFormalizationEngine
@@ -75,10 +79,7 @@ def _print_banner(user_input: str) -> None:
     print(f"{'─'*68}")
 
 def _print_layer(num: int, name: str, status: str, detail: str = "") -> None:
-    icon = _icon(status)
-    print(f"  Layer {num:2d} │ {icon} │ {name}")
-    if detail:
-        print(f"         └─ {DIM}{detail[:80]}{RST}")
+    log_layer_result(num, name, status, detail)
 
 
 def _print_leader_info(leader_decision: dict, monitors: list[dict]) -> None:

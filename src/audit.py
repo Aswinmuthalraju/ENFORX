@@ -25,6 +25,10 @@ import os
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from dotenv import load_dotenv
+
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.10.audit")
 
 
 LOG_PATH = Path(__file__).parent.parent / "enforx_audit.log"

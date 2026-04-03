@@ -20,6 +20,9 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.09.output_firewall")
+
 
 _ALLOWED_ENDPOINT   = "https://paper-api.alpaca.markets"
 _MAX_PAYLOAD_BYTES  = 10240

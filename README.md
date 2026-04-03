@@ -181,11 +181,12 @@ ENFORX/
 │       ├── risk_agent.py         # RiskAgent — devil's advocate; veto power
 │       ├── compliance_agent.py   # ComplianceAgent — policy enforcer
 │       └── execution_agent.py    # ExecutionAgent — final plan generator
-├── openclaw_tool.py              # OpenClaw plugin entry point + TOOL_MANIFEST
+├── logs/                         # Auto-created | Daily rotating enforx_YYYYMMDD.log/json
+├── logger_config.py              # Separate logging brain (Terminal + JSON + File)
 ├── enforx-policy.json            # Trading policy configuration
 ├── requirements.txt
 ├── Makefile
-└── .env.template                 # Environment template — copy to .env
+└── .env.example                  # Environment example — copy to .env
 ```
 
 ---
@@ -461,7 +462,38 @@ Layer 2 converts raw user text into a machine-verifiable, SHA-256-signed SID:
 }
 ```
 
-Every downstream layer validates against this SID. A plan cannot execute a tool or touch a ticker not listed in the SID — regardless of what the LLM decided.
+Every downstream layer validates against this SID. A plan cannot execute a tool not listed in the SID — regardless of what the LLM decided.
+
+---
+
+## Logging & Auditing
+
+ENFORX uses a dual-format logging system that simultaneously outputs to the terminal and persistent storage.
+
+### 1. Real-time Monitoring
+Watch the 10-layer pipeline execute in real-time with colour-coded status icons:
+```bash
+# Standard execution
+python -m src.cli "Buy 5 shares of AAPL"
+
+# Watch logs live in a separate terminal
+tail -f logs/enforx_$(date +%Y%m%d).log
+```
+
+### 2. Structured JSON Audit
+Every single run generates a machine-readable JSON log for automated auditing and post-incident analysis:
+```bash
+# Find all blocks/violations today
+grep "BLOCK\|VIOLATION\|ERROR" logs/enforx_*.log
+
+# Query specific layer events using jq
+cat logs/enforx_*.json | jq 'select(.layer == "layer.08.dap")'
+```
+
+### 3. Adaptive Audit Loop
+The audit log is append-only with SHA-256 hash chaining — each entry hashes the previous entry's hash, making retroactive tampering detectable. Every `BLOCK` generates a counterfactual explanation.
+
+---
 
 ### Pre-Trade Stress Test
 

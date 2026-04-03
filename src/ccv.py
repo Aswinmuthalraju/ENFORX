@@ -21,6 +21,9 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.06.ccv")
+
 TICKER_SECTOR: dict[str, str] = {
     "AAPL": "technology", "MSFT": "technology",
     "GOOGL": "technology", "AMZN": "technology", "NVDA": "technology",

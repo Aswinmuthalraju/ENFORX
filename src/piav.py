@@ -14,6 +14,9 @@ Returns: {aligned: bool, violations: list, result: "PASS"/"BLOCK", status}
 from __future__ import annotations
 from datetime import datetime, timezone
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.05.piav")
+
 TOOL_CATEGORY = {
     "query_market_data":  "research",
     "web_search":         "research",

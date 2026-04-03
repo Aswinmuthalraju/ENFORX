@@ -21,6 +21,9 @@ from pathlib import Path
 from datetime import datetime, timezone, time as dtime
 import pytz
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.07.fdee")
+
 
 class FinancialDomainEnforcementEngine:
 

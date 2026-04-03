@@ -15,13 +15,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import logging
-from pathlib import Path
-from datetime import datetime, timezone
+from logger_config import get_layer_logger
 
-from agents.deliberation import DeliberationOrchestrator
-
-logger = logging.getLogger(__name__)
+logger = get_layer_logger("layer.04.agent_core")
 
 
 class AgentCore:

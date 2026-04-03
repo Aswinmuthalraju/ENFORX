@@ -24,6 +24,9 @@ from collections import deque
 from datetime import datetime, timezone
 
 from llm_client import OpenClawClient
+from logger_config import get_layer_logger
+
+logger = get_layer_logger("layer.01.input_firewall")
 
 # ── Injection patterns ──────────────────────────────────────────────────────
 _INJECTION_PATTERNS = [
