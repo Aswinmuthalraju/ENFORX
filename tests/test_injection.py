@@ -1,4 +1,4 @@
-from enforxguard.input_firewall import InputFirewall
+from src.enforxguard_input import InputFirewall
 
 
 def test_injection_pattern_blocked():
@@ -29,7 +29,7 @@ def test_clean_input_passes():
     fw = InputFirewall()
     r = fw.scan("Buy 5 shares of AAPL")
     assert r["status"] == "PASS", f"Expected PASS, got {r['status']}"
-    assert r["taint_tag"] == "TRUSTED"
+    assert r["taint_level"] == "TRUSTED"
     print("  [PASS] Clean input passes firewall")
 
 

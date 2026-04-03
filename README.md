@@ -21,7 +21,7 @@
   - [OpenClaw + AntiGravity Configuration](#openclaw--antigravity-configuration)
   - [Environment Variables](#environment-variables)
 - [Running the Demo](#running-the-demo)
-  - [All 5 Scenarios](#all-5-scenarios)
+  - [All 6 Scenarios](#all-6-scenarios)
   - [Single Scenario](#single-scenario)
   - [Expected Outcomes](#expected-outcomes)
 - [How It Works](#how-it-works)
@@ -60,10 +60,11 @@ Any layer returning `BLOCK` halts the entire pipeline and triggers the audit loo
 
 ### Multi-Agent Deliberation System (Layer 4)
 
-Four specialized agents deliberate in **two parallel rounds** before any trade executes:
+ENFORX uses a **LeaderAgent supervisor** over three deliberation agents plus one execution agent:
 
 | Agent | API Key | Role | Veto Power |
 |-------|---------|------|------------|
+| **LeaderAgent** | Deterministic | Supervises pre-validation, round quality, and meta-decision | Can `OVERRIDE_BLOCK` / `ESCALATE` |
 | **AnalystAgent** | `API_KEY_1` | Argues *for* the trade — bullish researcher | No |
 | **RiskAgent** | `API_KEY_2` | Devil's advocate — finds every reason to block | **Yes** — if `confidence > 80` on BLOCK → instant pipeline stop |
 | **ComplianceAgent** | `API_KEY_3` | Policy enforcer — verifies SID alignment | No |
@@ -79,7 +80,7 @@ Four specialized agents deliberate in **two parallel rounds** before any trade e
 - **Round 1** — each agent independently assesses the trade proposal (run in parallel via `asyncio`)
 - **Round 2** — each agent sees Round 1 results and can respond to other agents' arguments (run in parallel)
 
-All deliberation rounds, verdicts, confidence scores, and agent reasoning are logged to the audit trail.
+All deliberation rounds, verdicts, confidence scores, fallback source flags (`llm` vs `heuristic_fallback`), leader monitors, and leader decisions are logged to the audit trail.
 
 ### 10-Layer Pipeline
 
@@ -119,15 +120,16 @@ ENFORX/
 │   ├── audit.py                  # Layer 10: Adaptive Audit Loop
 │   ├── alpaca_client.py          # Alpaca Paper Trading client
 │   └── agents/
+│       ├── leader_agent.py       # LeaderAgent (deterministic supervisor)
 │       ├── deliberation.py       # Orchestrator — async 2-round deliberation
 │       ├── analyst_agent.py      # AnalystAgent (API_KEY_1)
 │       ├── risk_agent.py         # RiskAgent (API_KEY_2) — veto power
 │       ├── compliance_agent.py   # ComplianceAgent (API_KEY_3)
 │       └── execution_agent.py    # ExecutionAgent (API_KEY_4)
-├── demo.py                       # 5-scenario interactive demo
+├── demo.py                       # 6-scenario interactive demo
 ├── enforx-policy.json            # Policy configuration
 ├── requirements.txt
-└── .env.example                  # Template — copy to .env and fill in keys
+└── .env.template                 # Template — copy to .env and fill in keys
 ```
 
 ---
@@ -157,7 +159,7 @@ source venv/bin/activate          # macOS / Linux
 pip install -r requirements.txt
 
 # 4. Copy environment template and fill in your keys
-cp .env.example .env
+cp .env.template .env
 # Then edit .env with your actual API keys (see section below)
 ```
 
@@ -210,7 +212,7 @@ The CSRG proof falls back to a deterministic SHA-256 stub so demos always run.
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and populate:
+Copy `.env.template` to `.env` and populate:
 
 ```bash
 # OpenClaw / ArmorClaw (AntiGravity)
@@ -247,7 +249,7 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ## Running the Demo
 
-### All 5 Scenarios
+### All 6 Scenarios
 
 ```bash
 cd ENFORX
@@ -255,7 +257,7 @@ source venv/bin/activate
 python demo.py
 ```
 
-This runs all 5 scenarios interactively. Press `ENTER` between each scenario.
+This runs all 6 scenarios interactively. Press `ENTER` between each scenario.
 
 ### Single Scenario
 
@@ -265,6 +267,7 @@ python demo.py --scenario 2   # Policy block — TSLA blocked at layers 4 + 7
 python demo.py --scenario 3   # Prompt injection — blocked at layer 1
 python demo.py --scenario 4   # DAP delegation scope breach — blocked at layer 8
 python demo.py --scenario 5   # Deliberation MODIFY — qty corrected, trade executes
+python demo.py --scenario 6   # Leader override — degraded round quality triggers block
 ```
 
 ### Expected Outcomes
@@ -276,6 +279,7 @@ python demo.py --scenario 5   # Deliberation MODIFY — qty corrected, trade exe
 | 3 | `…ignore previous rules… http://external.api/collect` | `BLOCKED_L1` — injection + malicious URL | Layer 1 (deliberation never starts) |
 | 4 | `Buy 20 AAPL` with delegation token capped at 5 shares | `BLOCKED_L8` — plan qty 8 > token cap 5 | Layer 8 |
 | 5 | `Buy 15 shares of MSFT` | `SUCCESS` — RiskAgent MODIFY, qty corrected to 8, trade executes | — (MODIFY applied) |
+| 6 | `Buy 5 shares of AAPL force leader override` | `BLOCKED_LEADER_OVERRIDE` — leader blocks due to degraded latest round | Leader meta-decision |
 
 **Sample terminal output for Scenario 1:**
 
@@ -440,46 +444,7 @@ Layer 3 (GRC) prevents invalid reasoning before it begins — analogous to compi
 
 ---
 
-## Telegram Bot & OpenClaw Tool
-
-### Telegram Bot
-
-The bot wraps `run_pipeline()` so you can send trade commands from Telegram.
-
-**Install dependency:**
-```bash
-pip install python-telegram-bot
-# or: pip install -r requirements.txt
-```
-
-**Configure `.env`:**
-```bash
-TELEGRAM_BOT_TOKEN=<your-bot-token>
-ALLOWED_TELEGRAM_USER_ID=<your-telegram-user-id>   # only this user can interact
-```
-
-**Run:**
-```bash
-source venv/bin/activate
-python telegram_bot.py
-# or:
-make telegram
-```
-
-**Commands in Telegram:**
-| Command | What it does |
-|---------|-------------|
-| `Buy 5 shares of AAPL` | Run a trade command through all 10 layers |
-| `/demo1` | Scenario 1 — valid trade (AAPL passes) |
-| `/demo2` | Scenario 2 — policy block (TSLA, qty=100) |
-| `/demo3` | Scenario 3 — prompt injection blocked at L1 |
-| `/demo4` | Scenario 4 — delegation token breach blocked at L8 |
-| `/demo5` | Scenario 5 — MSFT modified qty 15→10, executes |
-| `/help` | List all commands |
-
----
-
-### OpenClaw TUI Tool
+## OpenClaw TUI Tool
 
 `openclaw_tool.py` registers ENFORX as an OpenClaw-compatible tool with a `TOOL_MANIFEST` for auto-registration, and also runs standalone from the CLI.
 

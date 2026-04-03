@@ -29,9 +29,19 @@ class AgentCore:
     def __init__(self):
         self._orchestrator = DeliberationOrchestrator()
 
+    @property
+    def leader(self):
+        return self._orchestrator.leader
+
     # ── Public API ──────────────────────────────────────────────────────────
 
-    def run(self, grc_prompt: str, user_input: str, sid: dict) -> dict:
+    def run(
+        self,
+        grc_prompt: str,
+        user_input: str,
+        sid: dict,
+        firewall_result: dict = None,
+    ) -> dict:
         """
         Run the Multi-Agent Deliberation System and return the result.
 
@@ -42,21 +52,36 @@ class AgentCore:
           status               — "PROCEED" / "BLOCK" / "MODIFY"
           reasoning_trace      — string for downstream validators
         """
-        delib = self._orchestrator.run(sid, grc_prompt)
+        delib = self._orchestrator.run(sid, grc_prompt, firewall_result or {"status": "PASS"})
         consensus = delib.get("final_consensus", "BLOCK")
 
         if consensus == "BLOCK":
             return {
                 "status":              "BLOCK",
                 "deliberation_result": delib,
+                "leader_decision":     delib.get("leader_decision"),
+                "leader_monitors":     delib.get("leader_monitors", []),
                 "plan":                None,
                 "csrg_proof":          None,
                 "reasoning_trace":     delib.get("block_reason", "Deliberation blocked"),
                 "veto_triggered":      delib.get("veto_triggered", False),
             }
 
+        exec_plan = delib.get("execution_plan")
+        if not isinstance(exec_plan, dict):
+            leader_decision = delib.get("leader_decision", {})
+            return {
+                "status":              "BLOCK",
+                "deliberation_result": delib,
+                "leader_decision":     leader_decision,
+                "leader_monitors":     delib.get("leader_monitors", []),
+                "plan":                None,
+                "csrg_proof":          None,
+                "reasoning_trace":     delib.get("block_reason") or f"No execution plan produced (leader={leader_decision.get('decision', 'UNKNOWN')})",
+                "veto_triggered":      delib.get("veto_triggered", False),
+            }
+
         # Extract execution plan from deliberation
-        exec_plan = delib.get("execution_plan", {})
         plan_steps = exec_plan.get("plan", [])
         reasoning  = exec_plan.get("reasoning", exec_plan.get("reasoning_trace", ""))
 
@@ -74,6 +99,8 @@ class AgentCore:
         return {
             "status":              consensus,       # "PROCEED" or "MODIFY"
             "deliberation_result": delib,
+            "leader_decision":     delib.get("leader_decision"),
+            "leader_monitors":     delib.get("leader_monitors", []),
             "plan":                plan_steps,
             "csrg_proof":          csrg_proof,
             "reasoning_trace":     reasoning,

@@ -41,6 +41,8 @@ from enforxguard_output  import OutputFirewall
 from audit               import AdaptiveAuditLoop
 from alpaca_client       import AlpacaClient
 
+_AGENT_CORE = AgentCore()
+
 # ── ANSI colours ─────────────────────────────────────────────────────────────
 G  = "\033[92m"   # green
 R  = "\033[91m"   # red
@@ -77,6 +79,29 @@ def _print_layer(num: int, name: str, status: str, detail: str = "") -> None:
     print(f"  Layer {num:2d} │ {icon} │ {name}")
     if detail:
         print(f"         └─ {DIM}{detail[:80]}{RST}")
+
+
+def _print_leader_info(leader_decision: dict, monitors: list[dict]) -> None:
+    if not leader_decision:
+        return
+    dec = leader_decision.get("decision", "?")
+    risk = leader_decision.get("risk_score", "?")
+    anom = leader_decision.get("anomaly_count", 0)
+    col = G if dec == "APPROVE" else (R if "BLOCK" in dec else Y)
+    print(f"\n  {W}▶ LEADER AGENT DECISION{RST}")
+    print(f"    Decision : {col}{dec}{RST}")
+    print(f"    Risk     : {risk}/100")
+    print(f"    Anomalies: {anom}")
+    for reason in leader_decision.get("reasons", []):
+        print(f"    → {DIM}{reason}{RST}")
+    if monitors:
+        for monitor in monitors:
+            quality = monitor.get("quality", "?")
+            qcol = G if quality == "GOOD" else (Y if quality == "DEGRADED" else R)
+            print(
+                f"    Round {monitor.get('round', '?')}: {qcol}{quality}{RST} "
+                f"({len(monitor.get('anomalies', []))} anomalies)"
+            )
 
 
 def run_pipeline(
@@ -118,7 +143,7 @@ def run_pipeline(
 
     # ── LAYER 4: Multi-Agent Deliberation ───────────────────────────────────
     print(f"\n  {W}▶ MULTI-AGENT DELIBERATION STARTING...{RST}")
-    l4 = AgentCore().run(grc_prompt, sanitized, sid)
+    l4 = _AGENT_CORE.run(grc_prompt, sanitized, sid, firewall_result=l1)
     delib = l4.get("deliberation_result", {})
     layer_results["l4_deliberation"] = l4
 
@@ -126,10 +151,26 @@ def run_pipeline(
         _print_deliberation_transcript(delib)
 
     consensus = l4.get("status", "BLOCK")
+    _print_leader_info(l4.get("leader_decision"), l4.get("leader_monitors", []))
     _print_layer(4, "Multi-Agent Deliberation", consensus,
                  f"delib_id={delib.get('deliberation_id','')} "
                  f"veto={delib.get('veto_triggered',False)} "
                  f"duration={delib.get('deliberation_duration_ms','?')}ms")
+
+    leader_dec = l4.get("leader_decision", {})
+    if leader_dec.get("decision") == "OVERRIDE_BLOCK":
+        return _finalize(
+            "BLOCKED_LEADER_OVERRIDE",
+            layer_results,
+            user_input,
+            sid,
+            delib,
+            audit,
+            taint,
+            extra_info=leader_dec.get("reasons"),
+        )
+    if leader_dec.get("decision") == "ESCALATE":
+        print(f"  {Y}⚠ LEADER: ESCALATION RECOMMENDED - proceeding with caution{RST}")
 
     if consensus == "BLOCK":
         return _finalize("BLOCKED_L4", layer_results, user_input, sid, delib, audit, taint)
@@ -213,6 +254,28 @@ def run_pipeline(
     if l9["status"] == "EMERGENCY_BLOCK":
         return _finalize("BLOCKED_L9", layer_results, user_input, sid, delib, audit, taint)
 
+    enforcement_results = {
+        "l5_piav": l5,
+        "l6_ccv": l6,
+        "l7_fdee": l7,
+        "l8_dap": l8,
+        "l9_output": l9,
+    }
+    final_leader_decision = _AGENT_CORE.leader.meta_decide(delib, l4.get("leader_monitors", []), enforcement_results)
+    layer_results["leader_final_decision"] = final_leader_decision
+    _print_leader_info(final_leader_decision, [])
+    if final_leader_decision.get("decision") == "OVERRIDE_BLOCK":
+        return _finalize(
+            "BLOCKED_LEADER_OVERRIDE",
+            layer_results,
+            user_input,
+            sid,
+            delib,
+            audit,
+            taint,
+            extra_info=final_leader_decision.get("reasons"),
+        )
+
     # ── EXECUTION ────────────────────────────────────────────────────────────
     execution_result = {"status": "NO_TRADE", "note": "Research-only plan"}
     if trade_step:
@@ -250,6 +313,9 @@ def run_pipeline(
         "audit_entry_id":   audit_entry["entry_id"],
         "deliberation_id":  delib.get("deliberation_id"),
         "csrg_proof":       plan_data.get("csrg_proof"),
+        "leader_decision":  final_leader_decision,
+        "leader_monitors":  l4.get("leader_monitors", []),
+        "leader_session_summary": _AGENT_CORE.leader.session_summary(),
     }
 
 
@@ -313,7 +379,14 @@ def _finalize(
         execution_result=None,
     )
     print(f"{'═'*68}\n")
-    return {"status": outcome, "outcome": outcome, "details": extra_info}
+    l4 = layer_results.get("l4_deliberation", {})
+    return {
+        "status": outcome,
+        "outcome": outcome,
+        "details": extra_info,
+        "leader_decision": layer_results.get("leader_final_decision") or l4.get("leader_decision"),
+        "leader_monitors": l4.get("leader_monitors", []),
+    }
 
 
 if __name__ == "__main__":

@@ -1,13 +1,13 @@
-from enforxguard.input_firewall import InputFirewall
-from core.fdee import FinancialDomainEnforcementEngine
-from core.piav import PlanIntentAlignmentValidator
+from src.enforxguard_input import InputFirewall
+from src.fdee import FinancialDomainEnforcementEngine
+from src.piav import PlanIntentAlignmentValidator
 
 
 def test_input_firewall_passes_clean():
     fw = InputFirewall()
     result = fw.scan("Buy 5 shares of AAPL")
     assert result["status"] == "PASS", f"Expected PASS, got {result['status']}: {result}"
-    assert result["taint_tag"] == "TRUSTED", f"Expected TRUSTED taint, got {result['taint_tag']}"
+    assert result["taint_level"] == "TRUSTED", f"Expected TRUSTED taint, got {result['taint_level']}"
     print("  [PASS] Input firewall accepts clean input")
 
 
@@ -27,13 +27,18 @@ def test_fdee_allows_valid_trade():
 def test_piav_aligns_valid_plan():
     piav = PlanIntentAlignmentValidator()
     sid = {
-        "permitted_actions": ["execute_trade", "query_market_data"],
+        "permitted_actions": [
+            "query_market_data", "analyze_sentiment", "verify_constraints", "execute_trade"
+        ],
         "prohibited_actions": ["transmit_external", "file_write", "shell_exec"],
         "scope": {"tickers": ["AAPL"], "max_quantity": 10, "side": "buy", "order_type": "market"},
         "reasoning_bounds": {"allowed_topics": ["AAPL price"], "forbidden_topics": ["portfolio rebalancing"]}
     }
     plan = {
         "plan": [
+            {"tool": "query_market_data", "args": {"ticker": "AAPL"}, "step": 1},
+            {"tool": "analyze_sentiment", "args": {"ticker": "AAPL"}, "step": 2},
+            {"tool": "verify_constraints", "args": {"ticker": "AAPL"}, "step": 3},
             {"tool": "execute_trade", "args": {"symbol": "AAPL", "qty": 5, "side": "buy", "type": "market"}, "step": 1}
         ],
         "reasoning_trace": "Checking AAPL price and executing buy order."

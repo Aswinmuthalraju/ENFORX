@@ -1,28 +1,16 @@
-"""
-ENFORX Demo — 5 Scenarios (Multi-Agent Deliberation + 10-Layer Pipeline)
-Run: python demo.py
-     python demo.py --scenario 1    (single scenario)
-
-Scenario 1: ALLOWED          — Buy 5 AAPL  → all agents PROCEED → trade executes
-Scenario 2: BLOCKED-POLICY   — Buy 100 TSLA → Risk+Compliance BLOCK + FDEE double defense
-Scenario 3: BLOCKED-INJECTION— Prompt injection → Layer 1 blocks before deliberation
-Scenario 4: BLOCKED-DAP      — Analyst delegates buy 20 AAPL → token cap 10 → Layer 8 blocks
-Scenario 5: MODIFY+EXECUTE   — Buy 15 MSFT → RiskAgent MODIFY → corrected to 10 → executes
-"""
+"""ENFORX Demo - leader-supervised 10-layer scenarios."""
 
 from __future__ import annotations
-import sys
 import time
-from pathlib import Path
-
-# src/ is the live module directory
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+import sys
 
 from dotenv import load_dotenv
+from pathlib import Path
+
 load_dotenv(Path(__file__).parent / ".env")
 
-from main import run_pipeline
-from dap  import DelegationAuthorityProtocol
+from src.dap import DelegationAuthorityProtocol
+from src.main import run_pipeline
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
 G   = "\033[92m"
@@ -54,6 +42,14 @@ def scenario_result(result: dict) -> None:
     print(f"\n  {col}{'━'*60}{RST}")
     print(f"  {col}{W}{label}{RST}")
     print(f"  {col}{'━'*60}{RST}")
+
+    leader_dec = result.get("leader_decision")
+    if leader_dec:
+        print(
+            f"\n  {W}LEADER: {leader_dec.get('decision', '?')}{RST} "
+            f"(risk={leader_dec.get('risk_score', '?')}, "
+            f"anomalies={leader_dec.get('anomaly_count', 0)})"
+        )
 
 
 # ── Scenario 1 — Happy path ───────────────────────────────────────────────────
@@ -150,9 +146,19 @@ def scenario_5():
     return result
 
 
+def scenario_6():
+    scenario_header(
+        6, "LEADER OVERRIDE - Degraded agent quality",
+        "Forces low-confidence agent outputs so leader triggers OVERRIDE_BLOCK."
+    )
+    result = run_pipeline("Buy 5 shares of AAPL force leader override", demo_mode=True)
+    scenario_result(result)
+    return result
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 SCENARIOS = {1: scenario_1, 2: scenario_2, 3: scenario_3,
-             4: scenario_4, 5: scenario_5}
+             4: scenario_4, 5: scenario_5, 6: scenario_6}
 
 LABELS = {
     1: "Buy 5 AAPL       (all layers PASS)",
@@ -160,6 +166,7 @@ LABELS = {
     3: "Injection attack  (Layer 1 blocks)",
     4: "DAP delegation    (Layer 8 blocks scope breach)",
     5: "Buy 15 MSFT       (MODIFY → 10 → executes)",
+    6: "Force degraded agents (Leader override block)",
 }
 
 
@@ -170,16 +177,16 @@ def main():
         try:
             n = int(args[idx + 1])
         except (IndexError, ValueError):
-            print(f"{R}Usage: python demo.py --scenario <1-5>{RST}")
+            print(f"{R}Usage: python demo.py --scenario <1-6>{RST}")
             sys.exit(1)
         if n not in SCENARIOS:
-            print(f"{R}Unknown scenario {n}. Choose 1–5.{RST}")
+            print(f"{R}Unknown scenario {n}. Choose 1-6.{RST}")
             sys.exit(1)
         SCENARIOS[n]()
         return
 
     print(f"\n{W}{'═'*68}{RST}")
-    print(f"{W}  ENFORX — Full Demo (All 5 Scenarios){RST}")
+    print(f"{W}  ENFORX — Full Demo (All 6 Scenarios){RST}")
     print(f"{W}  10-Layer Causal Integrity + Multi-Agent Deliberation{RST}")
     print(f"{W}{'═'*68}{RST}")
     for n, label in LABELS.items():
@@ -201,6 +208,19 @@ def main():
         status = r.get("status", r.get("outcome", "?"))
         col    = G if status == "SUCCESS" else (Y if "MODIFY" in status else R)
         print(f"  Scenario {n}: {col}{status:22s}{RST}  {label}")
+
+    summary = results.get(6, {}).get("leader_session_summary")
+    if not summary:
+        for _, result in results.items():
+            if result.get("leader_session_summary"):
+                summary = result["leader_session_summary"]
+    if summary:
+        print(f"\n  {W}Leader Session Summary{RST}")
+        print(
+            f"  total={summary.get('total')} approvals={summary.get('approvals', 0)} "
+            f"overrides={summary.get('overrides', 0)} escalations={summary.get('escalations', 0)} "
+            f"avg_risk={summary.get('avg_risk', '?')} health={summary.get('health', '?')}"
+        )
     print(f"{W}{'═'*68}{RST}\n")
 
 

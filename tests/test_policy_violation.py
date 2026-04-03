@@ -1,4 +1,4 @@
-from core.fdee import FinancialDomainEnforcementEngine
+from src.fdee import FinancialDomainEnforcementEngine
 
 
 def test_tsla_blocked():
@@ -26,8 +26,8 @@ def test_quantity_corrected():
     r = fdee.enforce(plan)
     assert r["status"] == "CORRECT", f"Expected CORRECT for qty=50, got {r['status']}"
     assert "qty" in r["corrections"], f"Expected qty correction in: {r['corrections']}"
-    assert r["corrections"]["qty"]["corrected"] == 10
-    print(f"  [PASS] Qty 50 corrected to 10: {r['corrections']['qty']['reason']}")
+    assert r["corrections"]["qty"] == 10
+    print("  [PASS] Qty 50 corrected to 10")
 
 
 def test_denied_tool_blocked():

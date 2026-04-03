@@ -114,6 +114,8 @@ class ComplianceAgent:
             "confidence":            int(data.get("confidence", 70)),
             "reason":                str(data.get("reason", "")),
             "suggested_modification": data.get("suggested_modification"),
+            "source":                "llm",
+            "llm_available":         True,
         }
         if round_num == 2:
             result["response_to_others"] = str(data.get("response_to_others", ""))
@@ -198,6 +200,8 @@ class ComplianceAgent:
             "confidence":            confidence,
             "reason":                reason,
             "suggested_modification": None,
+            "source":                "heuristic_fallback",
+            "llm_available":         False,
         }
         if round_num == 2:
             r["response_to_others"] = ""

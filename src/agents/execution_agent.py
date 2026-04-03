@@ -110,6 +110,8 @@ class ExecutionAgent:
                 "csrg_proof":            f"CSRG-PENDING-{sid.get('sid_id', 'unknown')}",
                 "model":                 MODEL_ID,
                 "stub":                  False,
+                "source":                "llm",
+                "llm_available":         True,
             }
         except Exception:
             return self._rule_based_plan(sid, mods)
@@ -165,4 +167,6 @@ class ExecutionAgent:
             "csrg_proof":            f"CSRG-STUB-{sid_id}",
             "model":                 "rule-based",
             "stub":                  True,
+            "source":                "heuristic_fallback",
+            "llm_available":         False,
         }

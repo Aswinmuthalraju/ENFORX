@@ -109,6 +109,24 @@ class InputFirewall:
         if url_issue:
             return self._block(raw, "MALICIOUS_URL", url_issue, source)
 
+        # CHECK 5: Credential/PII keywords
+        blocked_patterns = ["api_key", "password", "secret", "token", "ssn", "account_number"]
+        lower = user_input.lower()
+        for pattern in blocked_patterns:
+            if pattern in lower:
+                return self._block(
+                    raw,
+                    "CREDENTIAL_LEAK",
+                    f"Blocked pattern '{pattern}' in input",
+                    source,
+                )
+
+        # CHECK 6: Credit card / SSN regex patterns
+        if re.search(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", user_input):
+            return self._block(raw, "PII_DETECTED", "Credit card pattern in input", source)
+        if re.search(r"\b\d{3}-\d{2}-\d{4}\b", user_input):
+            return self._block(raw, "PII_DETECTED", "SSN pattern in input", source)
+
         # PASS → tag and return
         taint_level = self._trust_levels.get(source, "UNTRUSTED")
         sanitized = self._sanitize(user_input)
@@ -128,7 +146,7 @@ class InputFirewall:
                 "timestamp":   datetime.now(timezone.utc).isoformat(),
             },
             "checks_passed": [
-                "RATE_LIMIT", "LENGTH", "ENCODING", "INJECTION", "URL"
+                "RATE_LIMIT", "LENGTH", "ENCODING", "INJECTION", "URL", "CREDENTIAL_SCAN", "PII_SCAN"
             ],
         }
 

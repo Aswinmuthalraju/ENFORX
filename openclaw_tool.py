@@ -12,10 +12,8 @@ import json
 import sys
 import os
 
-# Add project root to path so src.main is importable
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from src.main import run_pipeline
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+from main import run_pipeline
 
 
 def enforx_tool(command: str, demo_mode: bool = True) -> dict:
@@ -99,12 +97,10 @@ def format_for_tui(result: dict) -> str:
 TOOL_MANIFEST = {
     "name": "enforx",
     "description": (
-        "Enforx secure AI trading pipeline. "
-        "Runs a natural language trade command through 10 enforcement layers "
-        "(dual firewalls, intent formalization, guided reasoning constraints, "
-        "causal chain validation, policy enforcement, delegation authority, "
-        "and adaptive audit loop). "
-        "Returns a layer-by-layer safety verdict."
+        "Enforx leader-supervised secure trading pipeline. "
+        "Runs a natural language trade command through 10 layers with a "
+        "LeaderAgent supervising deliberation quality, risk vetoes, and "
+        "meta-decisions before deterministic enforcement and execution."
     ),
     "parameters": {
         "command": {

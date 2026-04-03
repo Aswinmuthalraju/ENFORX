@@ -95,7 +95,7 @@ class IntentFormalizationEngine:
             "out of permitted_actions. Never include prohibited tickers like TSLA."
         )
         resp = self._client.chat.completions.create(
-            model=os.getenv("MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct"),
+            model=os.getenv("MODEL_ID", "gpt-oss-120b"),
             messages=[
                 {"role": "system", "content":
                     "You are a financial intent parser. Parse user intent into a strict SID schema."},
@@ -182,6 +182,9 @@ class IntentFormalizationEngine:
 
     def _apply_ambiguity_rules(self, user_input: str, sid: dict) -> dict:
         text = user_input.lower()
+
+        if "force leader override" in text:
+            sid["force_degraded_agents"] = True
 
         # Ambiguity: conditional intent
         if re.search(r"\b(if|when|maybe|consider|might|should i|think about)\b", text):

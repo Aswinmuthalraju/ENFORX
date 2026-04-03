@@ -30,7 +30,7 @@ OPENCLAW_BASE_URL = os.getenv("OPENCLAW_BASE_URL", "http://127.0.0.1:18789/v1")
 OPENCLAW_API_KEY  = os.getenv("OPENCLAW_API_KEY", "")
 
 # LLM model ID
-MODEL_ID = os.getenv("MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
+MODEL_ID = os.getenv("MODEL_ID", "gpt-oss-120b")
 
 
 def get_key(agent_name: str) -> str:
