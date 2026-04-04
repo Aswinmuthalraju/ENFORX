@@ -399,7 +399,7 @@ def _run_pipeline_inner(
         "leader_decision":  final_leader_decision,
         "leader_monitors":  l4.get("leader_monitors", []),
         "leader_session_summary": _agent_core.leader.session_summary(),
-        "layer_results":    {k: {"status": v.get("status") or v.get("result")} for k, v in layer_results.items()},
+        "layer_results":    layer_results,
     }
 
 
@@ -479,7 +479,7 @@ def _finalize(
         "blocked_at":      blocked_at,
         "leader_decision": layer_results.get("leader_final_decision") or l4.get("leader_decision"),
         "leader_monitors": l4.get("leader_monitors", []),
-        "layer_results":   {k: {"status": v.get("status") or v.get("result")} for k, v in layer_results.items()},
+        "layer_results":   layer_results,
     }
 
 
