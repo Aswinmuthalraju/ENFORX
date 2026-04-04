@@ -6,18 +6,22 @@ class TestGRCFence(unittest.TestCase):
         self.grc = GuidedReasoningConstraints()
         self.base_sid = {
             "sid_id": "sid-2026-test",
+            "primary_action": "execute_trade",
             "permitted_actions": ["execute_trade", "query_market_data"],
             "prohibited_actions": ["transmit_external", "file_write"],
             "scope": {
                 "tickers": ["AAPL", "MSFT"],
                 "max_quantity": 50,
                 "order_type": "market",
-                "side": "buy"
+                "side": "buy",
             },
             "reasoning_bounds": {
                 "allowed_topics": ["AAPL price"],
-                "forbidden_topics": ["competitors"]
-            }
+                "forbidden_topics": ["competitors"],
+            },
+            "ambiguity_flags": [],
+            "taint_level": "TRUSTED",
+            "taint_tag": "TRUSTED",
         }
 
     def test_builds_fence(self):
