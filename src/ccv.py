@@ -25,14 +25,13 @@ from logger_config import get_layer_logger
 logger = get_layer_logger("layer.06.ccv")
 
 TICKER_SECTOR: dict[str, str] = {
-    "AAPL": "technology", "MSFT": "technology",
-    "GOOGL": "technology", "AMZN": "technology", "NVDA": "technology",
-    "TSLA": "consumer_discretionary", "META": "technology",
+    "AAPL": "technology", "TSLA": "consumer_discretionary", "NVDA": "technology",
+    "SPY": "etf", "QQQ": "etf", "VOO": "etf", "IVV": "etf",
 }
 
 FALLBACK_PRICES: dict[str, float] = {
-    "AAPL": 178.0, "MSFT": 415.0, "GOOGL": 175.0,
-    "AMZN": 185.0, "NVDA": 875.0, "TSLA": 175.0,
+    "AAPL": 178.0, "TSLA": 175.0, "NVDA": 875.0,
+    "SPY": 510.0, "QQQ": 440.0, "VOO": 470.0, "IVV": 515.0,
 }
 
 TOOL_CATEGORY = {
@@ -100,6 +99,13 @@ class CausalChainValidator:
         qty    = int(args.get("qty", 0))
         price  = FALLBACK_PRICES.get(symbol, 100.0)
         trade_usd = qty * price
+
+        # Hard quantity block: >= 10 is never allowed
+        if qty >= 10:
+            return self._block(
+                flags + ["QUANTITY_VIOLATION: Quantity must be below 10."],
+                warnings, None
+            )
 
         # Effective limits (adaptive)
         eff_sector_concentration = self.max_sector_concentration * multiplier

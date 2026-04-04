@@ -4,10 +4,12 @@
     "created": "2026-04-03",
 
     "trade_constraints": {
-      "max_per_order": 10,
+      "max_per_order": 9,
       "max_daily_volume": 50,
       "max_daily_exposure_usd": 5000,
-      "allowed_tickers": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+      "allowed_tickers": ["AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV"],
+      "block_if_quantity_gte": 10,
+      "quantity_rule": "Quantity must be strictly below 10. Maximum is 9 per order.",
       "allowed_order_types": ["market", "limit"],
       "prohibited_actions": ["short_sell", "margin_trade", "options"]
     },

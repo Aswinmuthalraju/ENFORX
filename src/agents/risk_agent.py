@@ -6,11 +6,8 @@ Special power: if confidence > 80 on BLOCK → instant veto regardless of other 
 
 from __future__ import annotations
 import logging
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llm_client import OpenClawClient
+from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +23,11 @@ PERSONA = (
     "If you output BLOCK with confidence > 80, your vote is a VETO — pipeline stops immediately."
 )
 
-class RiskAgent:
-    NAME = "risk"
 
-    def __init__(self):
-        self._llm = OpenClawClient()
+class RiskAgent(BaseAgent):
+    """Risk-adversarial deliberation agent — challenges every trade proposal."""
+
+    NAME = "risk"
 
     def deliberate(
         self,
@@ -39,19 +36,32 @@ class RiskAgent:
         others_output: dict | None = None,
         round_num: int = 1,
     ) -> dict:
+        """Return {verdict, confidence, reason, response_to_others (round 2 only)}.
+
+        Raises RuntimeError if the LLM endpoint is unreachable after retries.
+        """
         user_msg = self._build_prompt(sid, grc_prompt, others_output, round_num)
         result = self._llm.chat_json(PERSONA, user_msg, temperature=0.2, max_tokens=400)
         return self._validate_response(result, round_num)
 
-    def _build_prompt(self, sid, grc_prompt, others, round_num):
+    def _build_prompt(
+        self,
+        sid: dict,
+        grc_prompt: str,
+        others: dict | None,
+        round_num: int,
+    ) -> str:
+        """Build the round-specific prompt for the risk officer."""
         ticker = sid.get("scope", {}).get("tickers", ["?"])[0]
         qty    = sid.get("scope", {}).get("max_quantity", 0)
         side   = sid.get("scope", {}).get("side", "buy")
         parts  = [
             f"TRADE PROPOSAL: {side.upper()} {qty} shares of {ticker}",
             f"GRC CONSTRAINTS:\n{grc_prompt}",
-            f"POLICY: max_per_order=10, allowed_tickers=[AAPL,MSFT,GOOGL,AMZN,NVDA], "
-            f"no short_sell/margin/options",
+            f"POLICY: max_per_order=9, allowed_tickers=[AAPL,TSLA,NVDA,SPY,QQQ,VOO,IVV]\n"
+            f"RULE: Any order with quantity 10 or above MUST receive a BLOCK verdict with confidence 100.\n"
+            f"RULE: Any ticker not in the allowed list MUST receive a BLOCK verdict with confidence 100.\n"
+            f"State the exact reason clearly in your response.",
         ]
         if round_num == 2 and others:
             parts.append(
@@ -62,19 +72,3 @@ class RiskAgent:
             parts.append("Respond to their arguments. Stand by your risk assessment if warranted.")
         parts.append("Respond ONLY with valid JSON.")
         return "\n\n".join(parts)
-
-    def _validate_response(self, data: dict, round_num: int) -> dict:
-        verdict = str(data.get("verdict", "PROCEED")).upper()
-        if verdict not in ("PROCEED", "BLOCK", "MODIFY"):
-            verdict = "PROCEED"
-        result = {
-            "verdict":               verdict,
-            "confidence":            int(data.get("confidence", 50)),
-            "reason":                str(data.get("reason", "")),
-            "suggested_modification": data.get("suggested_modification"),
-            "source":                "llm",
-            "llm_available":         True,
-        }
-        if round_num == 2:
-            result["response_to_others"] = str(data.get("response_to_others", ""))
-        return result

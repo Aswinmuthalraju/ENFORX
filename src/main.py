@@ -20,6 +20,7 @@ from __future__ import annotations
 import sys
 import json
 import os
+import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -32,6 +33,22 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from logger_config import setup_logging, log_layer_result
 setup_logging()
+
+logger = logging.getLogger(__name__)
+
+# ── Startup: validate required env vars ──────────────────────────────────────
+from constants import REQUIRED_ENV_VARS
+
+def _validate_env() -> None:
+    """Raise EnvironmentError if any required env var is missing."""
+    missing = [v for v in REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables: {missing}. "
+            "Check your .env file."
+        )
+
+_validate_env()
 
 from enforxguard_input   import InputFirewall
 from ife                 import IntentFormalizationEngine
@@ -64,7 +81,6 @@ _STATUS_ICON = {
     "FLAG": f"{Y}⚠  FLAG{RST}",    "AUTHORIZED": f"{G}✅ AUTH{RST}",
     "DELEGATION_VIOLATION": f"{R}🚫 DAP BLOCK{RST}",
     "EXECUTE": f"{G}🚀 EXECUTE{RST}", "EMERGENCY_BLOCK": f"{R}🚨 EMERGENCY{RST}",
-    "SIMULATED": f"{B}🔵 SIMULATED{RST}",
 }
 
 def _icon(status: str) -> str:
@@ -111,6 +127,24 @@ def run_pipeline(
     agent_id:    str          = "trader-01",
     print_deliberation: bool  = True,
 ) -> dict:
+    try:
+        return _run_pipeline_inner(user_input, token, agent_id, print_deliberation)
+    except Exception as exc:
+        logger.exception("Unhandled pipeline exception for input %r", user_input)
+        return {
+            "status":     "ERROR",
+            "outcome":    "ERROR",
+            "details":    str(exc),
+            "blocked_at": "pipeline",
+        }
+
+
+def _run_pipeline_inner(
+    user_input:  str,
+    token:       dict  | None = None,
+    agent_id:    str          = "trader-01",
+    print_deliberation: bool  = True,
+) -> dict:
     _print_banner(user_input)
     layer_results: dict = {}
     audit = AdaptiveAuditLoop()
@@ -118,9 +152,10 @@ def run_pipeline(
     try:
         from llm_client import OpenClawClient
         if not OpenClawClient().is_available():
-            print(f"  {Y}⚠ WARNING: Ollama unreachable! Pipeline will fail on LLM calls.{RST}")
-    except Exception:
-        pass
+            print(f"  {Y}⚠ WARNING: LLM endpoint unreachable! Pipeline will fail on LLM calls.{RST}")
+    except Exception as exc:
+        logger.error("LLM availability check failed: %s", exc)
+        print(f"  {Y}⚠ WARNING: LLM availability check raised: {exc}{RST}")
 
     # ── LAYER 1: Input Firewall ──────────────────────────────────────────────
     l1 = InputFirewall().scan(user_input)
@@ -135,11 +170,16 @@ def run_pipeline(
 
     # ── LAYER 2: Intent Formalization (SID) ─────────────────────────────────
     sid = IntentFormalizationEngine().formalize(sanitized, l1)
-    layer_results["l2_ife"] = {"status": "PASS", "sid": sid}
-    _print_layer(2, "Intent Formalization (IFE)", "PASS",
+    l2_status = "BLOCK" if sid.get("resolution_method") == "block_on_ambiguity" else "PASS"
+    layer_results["l2_ife"] = {"status": l2_status, "sid": sid}
+    _print_layer(2, "Intent Formalization (IFE)", l2_status,
                  f"SID={sid['sid_id']} action={sid['primary_action']} "
                  f"scope={sid.get('scope', {}).get('tickers',[])} "
                  f"qty={sid.get('scope',{}).get('max_quantity',0)}")
+    
+    if l2_status == "BLOCK":
+        reason = f"Ambiguity detected: {', '.join(sid.get('ambiguity_flags', []))}"
+        return _finalize("BLOCKED_L2", layer_results, user_input, sid, None, audit, taint, reason)
 
     # ── LAYER 3: Guided Reasoning Constraints ───────────────────────────────
     grc_obj = GuidedReasoningConstraints()
@@ -299,7 +339,8 @@ def run_pipeline(
             print(f"  Status: {_icon(execution_result.get('status','?'))}"
                   f" | Order ID: {execution_result.get('order_id','N/A')}")
             print(f"  {G}{'─'*50}{RST}")
-        except ConnectionError as exc:
+        except (ConnectionError, RuntimeError) as exc:
+            logger.error("Alpaca order submission failed: %s", exc)
             execution_result = {"status": "ERROR", "error": str(exc)}
             print(f"  {R}TRADE FAILED: {exc}{RST}")
 
@@ -320,6 +361,8 @@ def run_pipeline(
     return {
         "status":           "SUCCESS",
         "outcome":          "SUCCESS",
+        "details":          None,
+        "blocked_at":       None,
         "execution_result": execution_result,
         "audit_entry_id":   audit_entry["entry_id"],
         "deliberation_id":  delib.get("deliberation_id"),
@@ -390,11 +433,20 @@ def _finalize(
         execution_result=None,
     )
     print(f"{'═'*68}\n")
+    # Determine the most accurate layer blocking the pipeline
+    blocked_at = outcome  # default to outcome identifier
+    for layer in ("l9_output", "l8_dap", "l7_fdee", "l6_ccv", "l5_piav", "l4_deliberation", "l2_ife", "l1_firewall"):
+        res = layer_results.get(layer, {})
+        if res.get("status") in ("BLOCK", "EMERGENCY_BLOCK", "MISALIGNED", "DELEGATION_VIOLATION"):
+            blocked_at = res.get("blocked_at") or layer
+            break
+
     l4 = layer_results.get("l4_deliberation", {})
     return {
-        "status": outcome,
-        "outcome": outcome,
-        "details": extra_info,
+        "status":          outcome,
+        "outcome":         outcome,
+        "details":         extra_info,
+        "blocked_at":      blocked_at,
         "leader_decision": layer_results.get("leader_final_decision") or l4.get("leader_decision"),
         "leader_monitors": l4.get("leader_monitors", []),
     }

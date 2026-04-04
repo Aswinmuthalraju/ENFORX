@@ -149,10 +149,10 @@ class InputFirewall:
             try:
                 semantic = self._semantic_scan(user_input)
                 if semantic.get("status") == "BLOCK":
-                    return self._block(raw, semantic.get("threat_type", "SEMANTIC_BLOCK"), 
+                    return self._block(raw, semantic.get("threat_type", "SEMANTIC_BLOCK"),
                                       semantic.get("reason", "Semantic check failed"), source)
-            except (ConnectionError, ValueError):
-                pass  # Regex checks already passed, semantic is bonus
+            except (ConnectionError, ValueError, RuntimeError) as exc:
+                logger.warning("Semantic scan unavailable (regex checks already passed): %s", exc)
 
         # PASS → tag and return
         taint_level = self._trust_levels.get(source, "UNTRUSTED")
@@ -196,7 +196,7 @@ class InputFirewall:
         trade_match = re.search(r"\b(buy|sell|purchase|trade|order)\b", text, re.IGNORECASE)
         if trade_match:
             found_tickers = re.findall(
-                r"\b(AAPL|MSFT|GOOGL|AMZN|NVDA|GOOG|TSLA|META|NFLX|GME|AMC)\b",
+                r"\b(AAPL|TSLA|NVDA|SPY|QQQ|VOO|IVV)\b",
                 text.upper(),
             )
             denied = [t for t in found_tickers if t not in self._allowed_tickers]

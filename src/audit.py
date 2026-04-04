@@ -69,8 +69,8 @@ class AdaptiveAuditLoop:
             if lr:
                 try:
                     self._last_reset = datetime.fromisoformat(lr)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as exc:
+                    logger.warning("Could not parse last_reset from audit state: %s", exc)
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -205,7 +205,8 @@ class AdaptiveAuditLoop:
             with open(_POLICY_PATH) as f:
                 policy = json.load(f)
             return policy.get("enforx_policy", {}).get("adaptive_thresholds", {})
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to load adaptive_thresholds from policy: %s — using defaults", exc)
             return {}
 
     def _load_state(self) -> dict:
@@ -300,7 +301,8 @@ class AdaptiveAuditLoop:
         try:
             last = json.loads(lines[-1])
             return last.get("entry_hash", "GENESIS")
-        except Exception:
+        except Exception as exc:
+            logger.warning("Could not parse last audit hash — starting fresh chain: %s", exc)
             return "GENESIS"
 
     def _summarize_deliberation(self, delib: dict | None) -> dict:

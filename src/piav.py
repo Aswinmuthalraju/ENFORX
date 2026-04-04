@@ -88,6 +88,10 @@ class PlanIntentAlignmentValidator:
             else:
                 checks_passed.append("QTY_IN_SCOPE")
 
+            # Hard quantity block: >= 10 is never allowed
+            if qty >= 10:
+                violations.append(f"Quantity {qty} is not allowed. Maximum is 9.")
+
         # CHECK 4: research_only enforcement
         if primary == "research_only":
             trade_tools = [t for t in plan_tools if TOOL_CATEGORY.get(t) == "trade"]
@@ -128,6 +132,7 @@ class PlanIntentAlignmentValidator:
             "aligned":        aligned,
             "result":         "PASS" if aligned else "BLOCK",
             "status":         "ALIGNED" if aligned else "MISALIGNED",
+            "blocked_at":     "layer.05.piav" if not aligned else None,
             "violations":     violations,
             "checks_passed":  checks_passed,
             "timestamp":      datetime.now(timezone.utc).isoformat(),
@@ -143,7 +148,7 @@ def test_piav():
         "permitted_actions": ["query_market_data", "analyze_sentiment",
                               "verify_constraints", "execute_trade"],
         "prohibited_actions": ["transmit_external", "short_sell"],
-        "scope": {"tickers": ["AAPL"], "max_quantity": 5, "side": "buy", "order_type": "market"},
+        "scope": {"tickers": ["AAPL"], "max_quantity": 9, "side": "buy", "order_type": "market"},
         "reasoning_bounds": {"forbidden_topics": ["portfolio_export"]},
         "ambiguity_flags": [],
     }

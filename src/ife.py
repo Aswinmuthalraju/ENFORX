@@ -28,14 +28,14 @@ logger = get_layer_logger("layer.02.ife")
 
 # Ordered list of (pattern, ticker) for rule-based extraction
 _TICKER_RE = re.compile(
-    r"\b(AAPL|MSFT|GOOGL|AMZN|NVDA|GOOG|TSLA|META|NFLX)\b", re.IGNORECASE
+    r"\b(AAPL|TSLA|NVDA|SPY|QQQ|VOO|IVV)\b", re.IGNORECASE
 )
 _QTY_RE    = re.compile(r"\b(\d+)\s+shares?\b", re.IGNORECASE)
 _BUY_RE    = re.compile(r"\b(buy|purchase|acquire|long)\b", re.IGNORECASE)
 _SELL_RE   = re.compile(r"\b(sell|short|liquidate)\b", re.IGNORECASE)
 _LIMIT_RE  = re.compile(r"\b(limit)\b", re.IGNORECASE)
 
-ALLOWED_TICKERS   = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
+ALLOWED_TICKERS   = ["AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV"]
 MANDATORY_PROHIB  = frozenset({"transmit_external", "file_write", "shell_exec", "data_export"})
 _id_counter       = itertools.count(1)
 
@@ -74,6 +74,16 @@ class IntentFormalizationEngine:
         else:
             sid = self._rule_based_formalize(user_input, sid_id)
 
+        # Post-generation validation: force execute_trade into permitted_actions
+        # whenever primary_action is execute_trade — LLMs sometimes forget it
+        if sid.get("primary_action") == "execute_trade":
+            if "execute_trade" not in sid.get("permitted_actions", []):
+                logger.warning("IFE: execute_trade missing from permitted_actions — force-adding")
+                sid.setdefault("permitted_actions", []).append("execute_trade")
+
+        # Unrecognized-ticker detection: flag tokens that look like tickers but aren't known
+        sid = self._flag_unrecognized_tickers(user_input, sid)
+
         # Ambiguity rules
         sid = self._apply_ambiguity_rules(user_input, sid)
 
@@ -103,7 +113,14 @@ class IntentFormalizationEngine:
             "- Set primary_action=research_only ONLY when the user expresses uncertainty "
             "('maybe', 'should I', 'consider', 'think about') or gives no specific action.\n"
             "- A price condition like 'if price < X' signals order_type=limit, not ambiguity.\n"
-            "- Never include prohibited tickers like TSLA."
+            "- Never include prohibited tickers like TSLA.\n\n"
+            "IMPORTANT: Allowed tickers are ONLY: AAPL, TSLA, NVDA, SPY, QQQ, VOO, IVV. "
+            "Any other ticker is invalid and must be flagged with ambiguity_flags: ['unrecognized_ticker'] "
+            "and resolution_method: 'block_on_ambiguity'.\n\n"
+            "IMPORTANT: For any BUY or SELL command, permitted_actions MUST always include ALL of: "
+            "query_market_data, analyze_sentiment, verify_constraints, execute_trade. "
+            "Never omit execute_trade for trade commands. "
+            "Only exclude execute_trade for research_only commands."
         )
         system_prompt = "You are a financial intent parser. Parse user intent into a strict SID schema."
         
@@ -168,7 +185,7 @@ class IntentFormalizationEngine:
             "prohibited_actions": prohibited_actions,
             "scope": {
                 "tickers":      tickers_in_scope,
-                "max_quantity": min(qty, 10) if qty > 0 else 0,
+                "max_quantity": min(qty, 9) if qty > 0 else 0,
                 "order_type":   order_type,
                 "side":         side,
             },
@@ -209,6 +226,51 @@ class IntentFormalizationEngine:
             sid["primary_action"]  = "research_only"
             sid["ambiguity_flags"].append("no_quantity_specified")
 
+        # Quantity validation: >= 10 is blocked
+        qty = int(sid.get("scope", {}).get("max_quantity", 0))
+        if qty >= 10:
+            sid.setdefault("ambiguity_flags", []).append("quantity_exceeded")
+            sid["resolution_method"] = "block_on_ambiguity"
+
+        return sid
+
+    def _flag_unrecognized_tickers(self, user_input: str, sid: dict) -> dict:
+        """Detect token-like words (ALL_CAPS or mixed-case, 2-6 chars) that look like
+        ticker symbols but are not in the known allowed list. Flags them so
+        downstream layers can surface a helpful error and block cleanly."""
+        # All tickers we recognise (allowed + common known ones)
+        known_tickers = {
+            "AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV",
+        }
+        # Look for capitalised word-tokens that smell like tickers
+        candidates = re.findall(r"\b([A-Z][A-Z0-9]{1,5})\b", user_input)
+        # Also accept title-case single words of 2–6 chars after a trade verb
+        trade_context = re.search(r"\b(buy|sell|purchase|trade)\b", user_input.lower())
+        if trade_context:
+            candidates += re.findall(r"\b([A-Z][a-z]{1,5})\b", user_input)
+        unrecognised = [
+            c.upper() for c in candidates
+            if c.upper() not in known_tickers
+            and c.upper() not in ("OF", "IN", "AT", "THE", "BUY", "SELL",
+                                   "SHARES", "SHARE", "STOCK", "A", "AN",
+                                   "I", "MY", "FOR", "AND", "OR")
+        ]
+        scope_tickers = [t.upper() for t in sid.get("scope", {}).get("tickers", [])]
+        
+        # Check if any ticker in scope is unknown
+        unknown_in_scope = [t for t in scope_tickers if t not in known_tickers]
+        if unknown_in_scope:
+            logger.warning("IFE: unauthorized ticker(s) in scope: %s", unknown_in_scope)
+            sid.setdefault("ambiguity_flags", []).append("unrecognized_ticker")
+            sid["resolution_method"] = "block_on_ambiguity"
+            return sid
+
+        bad = [t for t in unrecognised if t not in known_tickers and t not in scope_tickers]
+        if bad:
+            logger.warning("IFE: unrecognized ticker-like token(s): %s", bad)
+            sid.setdefault("ambiguity_flags", []).append("unrecognized_ticker")
+            sid["unrecognized_tickers"] = bad
+            sid["resolution_method"] = "block_on_ambiguity"
         return sid
 
     # ── Client setup ─────────────────────────────────────────────────────────
@@ -220,10 +282,10 @@ def test_ife():
     ife = IntentFormalizationEngine()
     cases = [
         "Buy 5 shares of AAPL",
-        "Sell 3 MSFT at limit",
+        "Sell 3 TSLA at limit",
         "Research NVDA performance",
-        "Maybe I should buy some GOOGL if it dips",
-        "Buy TSLA shares",  # not allowed ticker
+        "Maybe I should buy some SPY if it dips",
+        "Buy MSFT shares",  # not allowed ticker
     ]
     print("\n=== IFE Tests ===")
     for inp in cases:

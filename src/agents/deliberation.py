@@ -122,7 +122,7 @@ class DeliberationOrchestrator:
 
         if base["final_consensus"] in ("PROCEED", "MODIFY") and leader_decision.get("decision") == "APPROVE":
             summary = self._summarize_deliberation(r2_results)
-            execution_plan = await asyncio.get_event_loop().run_in_executor(
+            execution_plan = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: self._execution.generate_plan(sid, grc_prompt, base["final_consensus"], summary, modifications),
             )
@@ -131,7 +131,7 @@ class DeliberationOrchestrator:
         return base
 
     async def _run_round(self, sid: dict, grc_prompt: str, round_num: int, others: dict | None) -> dict:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         analyst_fut = loop.run_in_executor(None, lambda: self._safe_call(self._analyst, sid, grc_prompt, others, round_num))
         risk_fut = loop.run_in_executor(None, lambda: self._safe_call(self._risk, sid, grc_prompt, others, round_num))
         compliance_fut = loop.run_in_executor(None, lambda: self._safe_call(self._compliance, sid, grc_prompt, others, round_num))

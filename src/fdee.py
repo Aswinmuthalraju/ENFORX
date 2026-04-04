@@ -3,6 +3,8 @@ LAYER 7 — Financial Domain Enforcement Engine (FDEE)
 100% DETERMINISTIC — ZERO LLM CALLS.
 
 Simplex Safety Controller: evaluates every plan step against enforx-policy.json.
+Policy is loaded ONCE at class-definition time (module import), not per request.
+
 Can ALLOW (fully compliant), CORRECT (soft-violation auto-fixed), or BLOCK (hard violation).
 
 Rules enforced:
@@ -10,39 +12,60 @@ Rules enforced:
   - Max quantity per order (soft → CORRECT)
   - Daily volume limit
   - Prohibited trade actions (short_sell, margin, options)
-  - Market hours (09:30–16:00 ET) unless demo_mode=True
+  - Market hours (09:30–16:00 ET) unless ENFORX_SKIP_MARKET_HOURS=true
   - Denied tool usage (bash, exec, shell, curl, wget, ssh)
   - Credential pattern leak in args
 """
 
 from __future__ import annotations
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timezone, time as dtime
 import pytz
 
 from logger_config import get_layer_logger
+
 logger = get_layer_logger("layer.07.fdee")
+
+# ── Policy loaded ONCE at module import time ──────────────────────────────────
+_POLICY_PATH = Path(__file__).parent.parent / "enforx-policy.json"
+
+def _load_policy(path: Path) -> dict:
+    """Load enforx-policy.json exactly once at startup."""
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"enforx-policy.json not found at {path}. "
+            "This file is required for FDEE to operate."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"enforx-policy.json is malformed: {exc}"
+        ) from exc
+
+_POLICY: dict = _load_policy(_POLICY_PATH)
 
 
 class FinancialDomainEnforcementEngine:
+    """Deterministic policy enforcer for financial trade plans.
 
-    def __init__(
-        self,
-        policy_path: str | None = None,
-    ):
-        import os
-        self._skip_market_hours = os.getenv("ENFORX_SKIP_MARKET_HOURS", "").lower() == "true"
-        if policy_path is None:
-            policy_path = Path(__file__).parent.parent / "enforx-policy.json"
-        with open(policy_path) as f:
-            policy = json.load(f)
-        p = policy["enforx_policy"]
+    Policy is read from the module-level _POLICY singleton — loaded once at
+    import time, never re-read per request.
+    """
+
+    def __init__(self) -> None:
+        """Initialize FDEE from the pre-loaded policy singleton."""
+        self._skip_market_hours: bool = os.getenv("ENFORX_SKIP_MARKET_HOURS", "").lower() == "true"
+
+        p  = _POLICY["enforx_policy"]
         tc = p["trade_constraints"]
         self.max_per_order:          int       = tc["max_per_order"]
         self.max_daily_volume:       int       = tc["max_daily_volume"]
         self.max_daily_exposure_usd: float     = tc["max_daily_exposure_usd"]
-        self.allowed_tickers:        list[str] = [t.upper() for t in tc["allowed_tickers"]]
+        self.allowed_tickers:        list[str] = ["AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV"]
         self.allowed_order_types:    list[str] = tc["allowed_order_types"]
         self.prohibited_actions:     list[str] = tc["prohibited_actions"]
 
@@ -52,11 +75,11 @@ class FinancialDomainEnforcementEngine:
         self.tz_name:      str = tm["timezone"]
 
         tc2 = p["tool_constraints"]
-        self.denied_tools:   list[str] = tc2["deny"]
-        self.allowed_tools:  list[str] = tc2["allow"]
+        self.denied_tools:  list[str] = tc2["deny"]
+        self.allowed_tools: list[str] = tc2["allow"]
         self.blocked_cred_patterns: list[str] = p["data_constraints"]["blocked_patterns"]
 
-        # Session state
+        # Session state (per instance)
         self._daily_volume: int = 0
 
     # ── Public API ──────────────────────────────────────────────────────────
@@ -67,8 +90,8 @@ class FinancialDomainEnforcementEngine:
         Returns:
           {result: "ALLOW"/"CORRECT"/"BLOCK", corrections, violations, reason, enforced_plan}
         """
-        violations: list[str] = []
-        corrections: dict     = {}
+        violations:    list[str] = []
+        corrections:   dict      = {}
         checks_passed: list[str] = []
 
         steps      = plan.get("plan", [])
@@ -100,16 +123,27 @@ class FinancialDomainEnforcementEngine:
                 return self._block(violations, checks_passed, plan, "Non-trade policy violation")
             return self._allow(corrections, checks_passed, plan, "Research-only plan — no trade rules")
 
-        args        = trade_step.get("args", {})
-        symbol      = args.get("symbol", "").upper()
-        qty         = int(args.get("qty", 0))
-        side        = args.get("side", "").lower()
-        order_type  = args.get("type", "market").lower()
+        args       = trade_step.get("args", {})
+        symbol     = args.get("symbol", "").upper()
+        qty        = int(args.get("qty", 0))
+        side       = args.get("side", "").lower()
+        order_type = args.get("type", "market").lower()
+
+        # Hard Quantity Block: >= 10 is never allowed
+        if qty >= 10:
+            violations.append(
+                f"Quantity {qty} is not allowed. Maximum quantity per order is 9 shares. "
+                "Please request fewer than 10 shares."
+            )
+            return self._block(violations, checks_passed, plan, "QUANTITY_HARD_BLOCK")
 
         # RULE 3 — Ticker allowlist
         if symbol not in self.allowed_tickers:
             violations.append(
-                f"Ticker '{symbol}' not in approved list {self.allowed_tickers}"
+                f"Ticker {symbol} is not in the allowed list. Allowed tickers are: "
+                "AAPL (Apple Inc.), TSLA (Tesla Inc.), NVDA (NVIDIA Corp), "
+                "SPY (SPDR S&P 500 ETF Trust), QQQ (Invesco QQQ Trust), "
+                "VOO (Vanguard S&P 500 ETF), IVV (iShares Core S&P 500 ETF)."
             )
         else:
             checks_passed.append("TICKER_OK")
@@ -152,7 +186,7 @@ class FinancialDomainEnforcementEngine:
             else:
                 checks_passed.append("MARKET_HOURS_OK")
         else:
-            checks_passed.append("MARKET_HOURS_SKIPPED(DEMO)")
+            checks_passed.append("MARKET_HOURS_CHECK_SKIPPED")
 
         # ── Decision ────────────────────────────────────────────────────────
         if violations:
@@ -171,19 +205,23 @@ class FinancialDomainEnforcementEngine:
     # ── Private helpers ─────────────────────────────────────────────────────
 
     def _check_market_hours(self) -> tuple[bool, str]:
-        tz   = pytz.timezone(self.tz_name)
-        now  = datetime.now(tz).time()
+        """Check whether current time is within market hours."""
+        tz            = pytz.timezone(self.tz_name)
+        now           = datetime.now(tz).time()
         open_h, open_m   = map(int, self.market_open.split(":"))
         close_h, close_m = map(int, self.market_close.split(":"))
         market_open  = dtime(open_h, open_m)
         market_close = dtime(close_h, close_m)
         if not (market_open <= now <= market_close):
-            return (False,
-                    f"Outside market hours ({self.market_open}–{self.market_close} ET). "
-                    f"Current ET time: {now.strftime('%H:%M')}")
+            return (
+                False,
+                f"Outside market hours ({self.market_open}–{self.market_close} ET). "
+                f"Current ET time: {now.strftime('%H:%M')}",
+            )
         return (True, "")
 
-    def _allow(self, corrections, checks_passed, plan, reason) -> dict:
+    def _allow(self, corrections: dict, checks_passed: list, plan: dict, reason: str) -> dict:
+        """Return an ALLOW result."""
         return {
             "result":        "ALLOW",
             "status":        "ALLOW",
@@ -194,7 +232,8 @@ class FinancialDomainEnforcementEngine:
             "enforced_plan": plan,
         }
 
-    def _correct(self, corrections, checks_passed, plan, reason) -> dict:
+    def _correct(self, corrections: dict, checks_passed: list, plan: dict, reason: str) -> dict:
+        """Return a CORRECT result (soft-violation auto-fixed)."""
         return {
             "result":        "CORRECT",
             "status":        "CORRECT",
@@ -205,10 +244,12 @@ class FinancialDomainEnforcementEngine:
             "enforced_plan": plan,
         }
 
-    def _block(self, violations, checks_passed, plan, reason) -> dict:
+    def _block(self, violations: list, checks_passed: list, plan: dict, reason: str) -> dict:
+        """Return a BLOCK result (hard violation)."""
         return {
             "result":        "BLOCK",
             "status":        "BLOCK",
+            "blocked_at":    "layer.07.fdee",
             "corrections":   {},
             "violations":    violations,
             "reason":        reason,
@@ -218,7 +259,8 @@ class FinancialDomainEnforcementEngine:
 
 
 # ── Standalone test ──────────────────────────────────────────────────────────
-def test_fdee():
+def test_fdee() -> None:
+    """Run a quick sanity check of the FDEE."""
     import os
     os.environ["ENFORX_SKIP_MARKET_HOURS"] = "true"
     fdee = FinancialDomainEnforcementEngine()

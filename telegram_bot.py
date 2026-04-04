@@ -11,9 +11,11 @@ Prerequisites:
 """
 
 from __future__ import annotations
+import asyncio
 import logging
 import os
 import sys
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -35,29 +37,57 @@ ALLOWED_USER_ID    = int(os.getenv("ALLOWED_TELEGRAM_USER_ID", "0"))
 
 
 def _format_result(result: dict) -> str:
-    """Format pipeline result into a concise Telegram reply."""
+    """Format pipeline result into a rich Telegram reply with icons and detailed reasoning."""
     outcome = result.get("status") or result.get("outcome", "UNKNOWN")
-    lines = [f"*ENFORX Pipeline Result*\n`{outcome}`\n"]
+    
+    if "BLOCK" in str(outcome).upper() or "ERROR" in str(outcome).upper():
+        icon = "🚫"
+    elif outcome == "SUCCESS":
+        icon = "✅"
+    else:
+        icon = "⚠️"
+
+    lines = [f"{icon} *ENFORX Pipeline Result*", f"`{outcome}`", ""]
 
     if outcome == "SUCCESS":
         exec_r = result.get("execution_result", {})
         er_status = exec_r.get("status", "NO_TRADE")
-        lines.append(f"Trade: `{er_status}`")
+        lines.append(f"Trade Status: `{er_status}`")
         if exec_r.get("order_id"):
             lines.append(f"Order ID: `{exec_r['order_id']}`")
         if exec_r.get("symbol"):
-            lines.append(
-                f"Symbol: {exec_r['symbol']} | Qty: {exec_r.get('qty')} | "
-                f"Side: {exec_r.get('side')}"
-            )
-        lines.append(f"Audit: `{result.get('audit_entry_id', 'n/a')}`")
+            lines.append(f"Symbol: `{exec_r['symbol']}`")
+            lines.append(f"Qty: `{exec_r.get('qty')}` | Side: `{exec_r.get('side')}`")
+        lines.append(f"Audit ID: `{result.get('audit_entry_id', 'n/a')}`")
     else:
-        details = result.get("details")
+        blocked_at = result.get("blocked_at") or ""
+        if blocked_at:
+            lines.append(f"🔒 Blocked at: `{blocked_at}`")
+
+        details = result.get("details") or ""
         if details:
-            lines.append(f"Reason: {str(details)[:200]}")
+            if isinstance(details, list):
+                for d in details:
+                    lines.append(f"• {str(d)[:300]}")
+            else:
+                lines.append(f"Reason: {str(details)[:500]}")
+
         leader = result.get("leader_decision") or {}
         for reason in leader.get("reasons", []):
             lines.append(f"• {reason}")
+
+        # Ticker validation message
+        sid = result.get("sid") or {}
+        scope = sid.get("scope") or {}
+        tickers = scope.get("tickers") or []
+        allowed = ["AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV"]
+        if tickers and not any(t in allowed for t in tickers):
+            lines.append(f"\nℹ️ Ticker `{tickers}` is not allowed.")
+            lines.append(f"Allowed: `AAPL, TSLA, NVDA, SPY, QQQ, VOO, IVV`")
+        
+        qty = scope.get("max_quantity") or 0
+        if qty >= 10:
+            lines.append(f"\n⚠️ Quantity must be below 10. You requested `{qty}` shares. Maximum is 9.")
 
     return "\n".join(lines)
 
@@ -67,11 +97,62 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Unauthorized.")
         return
     await update.message.reply_text(
-        "ENFORX pipeline ready.\n"
-        "Send a trade command, e.g.:\n"
-        "  Buy 1 share of AAPL\n"
-        "  Sell 2 shares of MSFT"
+        "🛡 ENFORX Trading Bot Initialized.\n\n"
+        "Send a trade command to process it through the 10-layer safety pipeline.\n"
+        "Example: `Buy 1 share of AAPL`"
     )
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+    help_text = (
+        "ENFORX Trading Bot Commands:\n"
+        "/start — Initialize the bot\n"
+        "/status — Check system health\n"
+        "/help — Show this help\n\n"
+        "Trade Commands:\n"
+        "• Buy N shares of TICKER\n"
+        "• Sell N shares of TICKER\n\n"
+        "Allowed tickers: `AAPL (Apple Inc.), TSLA (Tesla Inc.), NVDA (NVIDIA Corp), "
+        "SPY (SPDR S&P 500 ETF Trust), QQQ (Invesco QQQ Trust), "
+        "VOO (Vanguard S&P 500 ETF), IVV (iShares Core S&P 500 ETF)`.\n"
+        "Maximum quantity: 9 shares per order (must be below 10)."
+    )
+    await update.message.reply_text(help_text)
+
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+    
+    status_msg = "🔍 *ENFORX System Health*\n\n"
+    
+    # Ollama
+    try:
+        from llm_client import OpenClawClient
+        client = OpenClawClient()
+        status_msg += f"• Ollama (LLM): `{'CONNECTED' if client.is_available() else 'OFFLINE'}`\n"
+    except Exception:
+        status_msg += "• Ollama (LLM): `ERROR`\n"
+
+    # Alpaca
+    try:
+        from alpaca_client import AlpacaClient
+        ac = AlpacaClient()
+        if ac._api:
+            acc = ac.get_account()
+            status_msg += f"• Alpaca Paper: `CONNECTED` (Cash: `${acc.get('cash', '?')}`)\n"
+        else:
+            status_msg += "• Alpaca Paper: `NOT CONFIGURED`\n"
+    except Exception:
+        status_msg += "• Alpaca Paper: `OFFLINE`\n"
+
+    # Policy
+    policy_path = Path(__file__).parent / "enforx-policy.json"
+    status_msg += f"• Policy File: `{'FOUND' if policy_path.exists() else 'MISSING'}`\n"
+    
+    await update.message.reply_text(status_msg, parse_mode="Markdown")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,17 +166,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not text:
         return
 
+    # Basic input validation
+    if not re.search(r"\b(buy|sell)\b", text.lower()):
+        await update.message.reply_text("⚠️ Please send a trade command. Example: `Buy 2 shares of AAPL`")
+        return
+
     logger.info("Telegram command from %s: %r", user.id, text)
-    await update.message.reply_text("Processing through ENFORX pipeline...")
+    await update.message.reply_text("⏳ Processing through ENFORX pipeline...")
 
     try:
-        result = run_pipeline(text)
-        reply = _format_result(result)
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, run_pipeline, text)
+        try:
+            reply = _format_result(result)
+            await update.message.reply_text(reply, parse_mode="Markdown")
+        except Exception as fmt_exc:
+            logger.exception("Formatting error")
+            await update.message.reply_text(f"Result (raw): `{str(result)[:500]}`")
     except Exception as exc:
         logger.exception("Pipeline error for Telegram command %r", text)
-        reply = f"Pipeline error: {exc}"
-
-    await update.message.reply_text(reply, parse_mode="Markdown")
+        await update.message.reply_text(f"Pipeline error: `{type(exc).__name__}: {str(exc)[:300]}`")
 
 
 def main() -> None:
@@ -107,6 +197,8 @@ def main() -> None:
     logger.info("Starting ENFORX Telegram bot (allowed user: %s)", ALLOWED_USER_ID)
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("status", status_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 

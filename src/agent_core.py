@@ -95,10 +95,10 @@ class ArmorClawClient:
                            resp.status_code, resp.text[:200])
             return None
         except requests.exceptions.Timeout:
-            logger.warning("ArmorIQ IAP timed out — falling back to stub")
+            logger.warning("ArmorIQ IAP timed out — CSRG will fall back to stub")
             return None
         except Exception as exc:
-            logger.debug("ArmorIQ IAP call failed: %s", exc)
+            logger.error("ArmorIQ IAP call failed: %s", exc)
             return None
 
 
@@ -117,7 +117,7 @@ class AgentCore:
     def run(
         self,
         grc_prompt: str,
-        user_input: str,
+        _user_input: str,
         sid: dict,
         firewall_result: dict = None,
     ) -> dict:
