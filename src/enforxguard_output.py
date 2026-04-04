@@ -15,17 +15,30 @@ Returns: {status: "EXECUTE"/"EMERGENCY_BLOCK", reason}
 """
 
 from __future__ import annotations
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from logger_config import get_layer_logger
 logger = get_layer_logger("layer.09.output_firewall")
 
 
 _ALLOWED_ENDPOINT   = "https://paper-api.alpaca.markets"
+_ALLOWED_HOSTNAME   = "paper-api.alpaca.markets"
 _MAX_PAYLOAD_BYTES  = 10240
+_ALLOWED_PAYLOAD_KEYS = {
+    "endpoint",
+    "symbol",
+    "qty",
+    "side",
+    "type",
+    "time_in_force",
+    "limit_price",
+    "action",
+}
 
 _PII_PATTERNS = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
@@ -42,17 +55,39 @@ _CRED_PATTERNS = [
 
 class OutputFirewall:
 
+    def __init__(self, policy_path: str | None = None):
+        if policy_path is None:
+            policy_path = Path(__file__).parent.parent / "enforx-policy.json"
+        with open(policy_path) as f:
+            policy = json.load(f)
+        self._policy_hash = hashlib.sha256(
+            json.dumps(policy, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:16]
+
     def scan(self, api_payload: dict, validated_plan: dict, taint_chain: list) -> dict:
         """Scan outgoing API payload before it reaches Alpaca.
 
         Returns {status: "EXECUTE"/"EMERGENCY_BLOCK", reason, checks_passed, checks_failed}
         """
+        if not isinstance(api_payload, dict):
+            return self._block(
+                f"API payload must be a dict, got {type(api_payload).__name__}",
+                [], ["INVALID_PAYLOAD_TYPE"]
+            )
+        if not isinstance(validated_plan, dict):
+            return self._block(
+                f"Validated plan must be a dict, got {type(validated_plan).__name__}",
+                [], ["INVALID_PLAN_TYPE"]
+            )
+        taint_chain = [str(item) for item in (taint_chain or [])]
+
         checks_passed: list[str] = []
         checks_failed: list[str] = []
 
         # CHECK 1: Endpoint
-        endpoint = api_payload.get("endpoint", "")
-        if not endpoint.startswith(_ALLOWED_ENDPOINT):
+        endpoint = str(api_payload.get("endpoint", ""))
+        parsed_endpoint = urlsplit(endpoint)
+        if not self._is_allowed_endpoint(parsed_endpoint):
             checks_failed.append("ENDPOINT_VIOLATION")
             return self._block(
                 f"Outbound endpoint '{endpoint}' not allowed. "
@@ -62,7 +97,7 @@ class OutputFirewall:
         checks_passed.append("ENDPOINT_OK")
 
         # CHECK 2: Redirect detection
-        if any(c in endpoint for c in ("redirect", "forward", "proxy", "@")):
+        if any(c in endpoint.lower() for c in ("redirect", "forward", "proxy")) or parsed_endpoint.username or parsed_endpoint.password:
             checks_failed.append("REDIRECT_DETECTED")
             return self._block(
                 f"Redirect/proxy pattern in endpoint: '{endpoint}'",
@@ -71,7 +106,7 @@ class OutputFirewall:
         checks_passed.append("NO_REDIRECT")
 
         # CHECK 3: Payload size
-        payload_bytes = len(json.dumps(api_payload).encode("utf-8"))
+        payload_bytes = len(json.dumps(api_payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
         if payload_bytes > _MAX_PAYLOAD_BYTES:
             checks_failed.append("PAYLOAD_TOO_LARGE")
             return self._block(
@@ -79,6 +114,16 @@ class OutputFirewall:
                 checks_passed, checks_failed
             )
         checks_passed.append("PAYLOAD_SIZE_OK")
+
+        # CHECK 3b: Unexpected payload keys
+        unexpected_keys = sorted(set(api_payload) - _ALLOWED_PAYLOAD_KEYS)
+        if unexpected_keys:
+            checks_failed.append("UNEXPECTED_PAYLOAD_KEYS")
+            return self._block(
+                f"Unexpected payload keys present: {unexpected_keys}",
+                checks_passed, checks_failed
+            )
+        checks_passed.append("PAYLOAD_KEYS_OK")
 
         # CHECK 4: PII scan
         pii_hit = self._scan_pii(api_payload)
@@ -102,7 +147,7 @@ class OutputFirewall:
         checks_passed.append("PLAN_CONSISTENT")
 
         # CHECK 7: Taint chain
-        if "UNTRUSTED" in taint_chain:
+        if any(item.upper() == "UNTRUSTED" for item in taint_chain):
             checks_failed.append("TAINT_CHAIN_VIOLATION")
             return self._block(
                 "UNTRUSTED data in taint chain — cannot send to Alpaca API",
@@ -115,6 +160,7 @@ class OutputFirewall:
             "reason":        "All output firewall checks passed",
             "checks_passed": checks_passed,
             "checks_failed": [],
+            "policy_hash":   self._policy_hash,
             "timestamp":     datetime.now(timezone.utc).isoformat(),
         }
 
@@ -145,12 +191,21 @@ class OutputFirewall:
             return None  # research-only, no trade params to check
 
         plan_args   = trade_step.get("args", {})
-        plan_symbol = plan_args.get("symbol", "").upper()
-        plan_qty    = int(plan_args.get("qty", 0))
-        plan_side   = plan_args.get("side", "").lower()
+        if not isinstance(plan_args, dict):
+            return "Trade plan args are malformed"
+
+        plan_symbol = str(plan_args.get("symbol", "")).upper()
+        plan_side   = str(plan_args.get("side", "")).lower()
+        try:
+            plan_qty = int(plan_args.get("qty", 0))
+        except (TypeError, ValueError):
+            return f"Trade plan qty is invalid: {plan_args.get('qty', None)!r}"
 
         pay_symbol  = str(payload.get("symbol", "")).upper()
-        pay_qty     = int(payload.get("qty", payload.get("qty", 0)))
+        try:
+            pay_qty = int(payload.get("qty", payload.get("qty", 0)))
+        except (TypeError, ValueError):
+            return f"Payload qty is invalid: {payload.get('qty', None)!r}"
         pay_side    = str(payload.get("side", "")).lower()
 
         if pay_symbol and plan_symbol and pay_symbol != plan_symbol:
@@ -159,20 +214,42 @@ class OutputFirewall:
             return f"Qty mismatch: payload={pay_qty} vs plan={plan_qty}"
         if pay_side and plan_side and pay_side != plan_side:
             return f"Side mismatch: payload='{pay_side}' vs plan='{plan_side}'"
+
+        expected_keys = {"endpoint", "symbol", "qty", "side", "type", "time_in_force"}
+        if str(plan_args.get("type", "market")).lower() == "limit":
+            expected_keys.add("limit_price")
+        unexpected = sorted(set(payload) - expected_keys)
+        if unexpected:
+            return f"Unexpected payload fields: {unexpected}"
         return None
 
-    def _iter_strings(self, d: dict):
-        for v in d.values():
-            if isinstance(v, str):
-                yield v
-            elif isinstance(v, dict):
-                yield from self._iter_strings(v)
+    def _iter_strings(self, value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for nested in value.values():
+                yield from self._iter_strings(nested)
+        elif isinstance(value, (list, tuple, set)):
+            for nested in value:
+                yield from self._iter_strings(nested)
 
-    def _iter_kv(self, d: dict, prefix: str = ""):
-        for k, v in d.items():
-            yield (k, v)
-            if isinstance(v, dict):
+    def _iter_kv(self, value, prefix: str = ""):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                yield (k, v)
                 yield from self._iter_kv(v, k)
+        elif isinstance(value, (list, tuple, set)):
+            for nested in value:
+                yield from self._iter_kv(nested, prefix)
+
+    def _is_allowed_endpoint(self, parsed_endpoint) -> bool:
+        if parsed_endpoint.scheme != "https":
+            return False
+        if parsed_endpoint.hostname != _ALLOWED_HOSTNAME:
+            return False
+        if parsed_endpoint.port not in (None, 443):
+            return False
+        return True
 
     def _block(self, reason: str, passed: list, failed: list) -> dict:
         return {
@@ -180,6 +257,7 @@ class OutputFirewall:
             "reason":        reason,
             "checks_passed": passed,
             "checks_failed": failed,
+            "policy_hash":   self._policy_hash,
             "timestamp":     datetime.now(timezone.utc).isoformat(),
         }
 
