@@ -30,9 +30,14 @@ class FinancialDomainEnforcementEngine:
     def __init__(
         self,
         policy_path: str | None = None,
+        skip_market_hours: bool | None = None,
     ):
         import os
-        self._skip_market_hours = os.getenv("ENFORX_SKIP_MARKET_HOURS", "").lower() == "true"
+        env_skip = os.getenv("ENFORX_SKIP_MARKET_HOURS", "").lower() == "true"
+        if skip_market_hours is not None:
+            self._skip_market_hours = skip_market_hours
+        else:
+            self._skip_market_hours = env_skip
         if policy_path is None:
             policy_path = Path(__file__).parent.parent / "enforx-policy.json"
         with open(policy_path) as f:
@@ -97,12 +102,24 @@ class FinancialDomainEnforcementEngine:
         )
         if not trade_step:
             if violations:
+                logger.warning(f"FDEE BLOCK: {violations}")
                 return self._block(violations, checks_passed, plan, "Non-trade policy violation")
+            logger.info("FDEE ALLOW: all checks passed")
             return self._allow(corrections, checks_passed, plan, "Research-only plan — no trade rules")
 
         args        = trade_step.get("args", {})
-        symbol      = args.get("symbol", "").upper()
-        qty         = int(args.get("qty", 0))
+        symbol      = args.get("symbol", args.get("ticker", "")).upper()
+        try:
+            qty = int(args.get("qty", 0))
+        except (ValueError, TypeError):
+            _qty_violations = ["Invalid quantity format"]
+            logger.warning(f"FDEE BLOCK: {_qty_violations}")
+            return self._block(
+                _qty_violations,
+                checks_passed,
+                plan,
+                "Quantity must be an integer"
+            )
         side        = args.get("side", "").lower()
         order_type  = args.get("type", "market").lower()
 
@@ -156,15 +173,18 @@ class FinancialDomainEnforcementEngine:
 
         # ── Decision ────────────────────────────────────────────────────────
         if violations:
+            logger.warning(f"FDEE BLOCK: {violations}")
             return self._block(violations, checks_passed, plan,
                                "; ".join(violations))
 
         if corrections:
             self._daily_volume += qty
+            logger.info(f"FDEE CORRECT: {corrections}")
             return self._correct(corrections, checks_passed, plan,
                                  f"Auto-corrected: {corrections}")
 
         self._daily_volume += qty
+        logger.info("FDEE ALLOW: all checks passed")
         return self._allow(corrections, checks_passed, plan,
                            "All financial domain checks passed")
 
