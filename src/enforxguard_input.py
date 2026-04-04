@@ -15,16 +15,13 @@ Returns: {status: "PASS"/"BLOCK", reason, tagged_input, taint_level, sanitized_i
 """
 
 from __future__ import annotations
-import base64
-import hashlib
-import html
-import json
 import re
-import unicodedata
+import base64
+import json
+import hashlib
 from pathlib import Path
 from collections import deque
 from datetime import datetime, timezone
-from urllib.parse import unquote
 
 from llm_client import OpenClawClient
 from logger_config import get_layer_logger
@@ -54,7 +51,6 @@ _B64_RE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
 
 # ── Suspicious unicode ranges ────────────────────────────────────────────────
 _UNICODE_TRICK_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\ufeff\u2060-\u206f]")
-_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 
 
 class InputFirewall:
@@ -67,17 +63,9 @@ class InputFirewall:
         with open(policy_path) as f:
             policy = json.load(f)
         p = policy["enforx_policy"]
-        self._policy_version = p.get("version", "unknown")
-        self._policy_hash = hashlib.sha256(
-            json.dumps(policy, sort_keys=True).encode("utf-8")
-        ).hexdigest()[:16]
         self._injection_patterns = [
             pat.lower()
             for pat in p["enforxguard_rules"]["input_firewall"]["injection_patterns"]
-        ]
-        self._compact_injection_patterns = [
-            _NON_ALNUM_RE.sub("", pat.casefold())
-            for pat in self._injection_patterns
         ]
         self._trust_levels: dict[str, str] = p["data_constraints"]["trust_levels"]
         # Rate-limit window: store call timestamps (last 60 s)
@@ -96,17 +84,7 @@ class InputFirewall:
         Returns a result dict with status PASS or BLOCK.
         All checks run in order; first failure stops the chain.
         """
-        if not isinstance(user_input, str):
-            return self._block(
-                str(user_input),
-                "INVALID_INPUT_TYPE",
-                f"Input must be a string, got {type(user_input).__name__}",
-                source,
-            )
-
         raw = user_input
-        canonical = self._canonicalize(user_input)
-        compact = _NON_ALNUM_RE.sub("", canonical.casefold())
 
         # CHECK 0: Rate limiting
         now = datetime.now(timezone.utc).timestamp()
@@ -124,25 +102,25 @@ class InputFirewall:
                 f"Input length {len(user_input)} exceeds max {self.MAX_INPUT_LENGTH}", source)
 
         # CHECK 2: Encoding attacks
-        enc_issue = self._detect_encoding_attacks(canonical)
+        enc_issue = self._detect_encoding_attacks(user_input)
         if enc_issue:
             return self._block(raw, "ENCODING_ATTACK", enc_issue, source)
 
         # CHECK 3: Injection patterns
-        lower = canonical.casefold()
-        for pat, compact_pat in zip(self._injection_patterns, self._compact_injection_patterns):
-            if pat in lower or compact_pat in compact:
+        lower = user_input.lower()
+        for pat in self._injection_patterns:
+            if pat in lower:
                 return self._block(raw, "INJECTION",
                     f"Prompt injection pattern detected: '{pat}'", source)
 
         # CHECK 4: Malicious URLs
-        url_issue = self._detect_malicious_urls(canonical)
+        url_issue = self._detect_malicious_urls(user_input)
         if url_issue:
             return self._block(raw, "MALICIOUS_URL", url_issue, source)
 
         # CHECK 5: Credential/PII keywords
         blocked_patterns = ["api_key", "password", "secret", "token", "ssn", "account_number"]
-        lower = canonical.casefold()
+        lower = user_input.lower()
         for pattern in blocked_patterns:
             if pattern in lower:
                 return self._block(
@@ -153,9 +131,9 @@ class InputFirewall:
                 )
 
         # CHECK 6: Credit card / SSN regex patterns
-        if re.search(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", canonical):
+        if re.search(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", user_input):
             return self._block(raw, "PII_DETECTED", "Credit card pattern in input", source)
-        if re.search(r"\b\d{3}-\d{2}-\d{4}\b", canonical):
+        if re.search(r"\b\d{3}-\d{2}-\d{4}\b", user_input):
             return self._block(raw, "PII_DETECTED", "SSN pattern in input", source)
 
         # CHECK 7: Semantic LLM-based scan
@@ -170,7 +148,7 @@ class InputFirewall:
 
         # PASS → tag and return
         taint_level = self._trust_levels.get(source, "UNTRUSTED")
-        sanitized = self._sanitize(canonical)
+        sanitized = self._sanitize(user_input)
         return {
             "status":         "PASS",
             "reason":         "All input checks passed",
@@ -185,14 +163,10 @@ class InputFirewall:
                 "trust_level": taint_level,
                 "hash":        hashlib.sha256(sanitized.encode()).hexdigest()[:16],
                 "timestamp":   datetime.now(timezone.utc).isoformat(),
-                "policy_version": self._policy_version,
-                "policy_hash":    self._policy_hash,
             },
             "checks_passed": [
                 "RATE_LIMIT", "LENGTH", "ENCODING", "INJECTION", "URL", "CREDENTIAL_SCAN", "PII_SCAN"
             ],
-            "policy_version": self._policy_version,
-            "policy_hash":    self._policy_hash,
         }
 
     # ── Private helpers ─────────────────────────────────────────────────────
@@ -224,14 +198,6 @@ class InputFirewall:
                 pass
         return None
 
-    def _canonicalize(self, text: str) -> str:
-        text = html.unescape(unquote(text))
-        text = unicodedata.normalize("NFKC", text)
-        text = _UNICODE_TRICK_RE.sub("", text)
-        text = text.replace("\x00", "")
-        text = re.sub(r"\s+", " ", text)
-        return text.strip()
-
     def _detect_malicious_urls(self, text: str) -> str | None:
         urls = _URL_RE.findall(text)
         if urls:
@@ -241,7 +207,6 @@ class InputFirewall:
     def _sanitize(self, text: str) -> str:
         # Strip unicode tricks
         cleaned = _UNICODE_TRICK_RE.sub("", text)
-        cleaned = re.sub(r"\s+", " ", cleaned)
         return cleaned.strip()
 
     def _block(self, raw: str, threat_type: str, reason: str, source: str) -> dict:
@@ -256,8 +221,6 @@ class InputFirewall:
             "source":         source,
             "tagged_input":   {},
             "timestamp":      datetime.now(timezone.utc).isoformat(),
-            "policy_version": self._policy_version,
-            "policy_hash":    self._policy_hash,
         }
 
 

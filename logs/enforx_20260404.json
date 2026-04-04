@@ -1,0 +1,37 @@
+{"timestamp": "2026-04-04T10:43:25.139068", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: http://localhost:11434/v1 model=mistral"}
+{"timestamp": "2026-04-04T10:43:25.141974", "layer": "llm_client", "level": "ERROR", "message": "Ollama not running on http://localhost:11434/v1/models"}
+{"timestamp": "2026-04-04T11:35:17.674586", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: http://localhost:11434/v1 model=mistral"}
+{"timestamp": "2026-04-04T11:35:17.674970", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T11:35:17.678103", "layer": "llm_client", "level": "ERROR", "message": "Ollama not running on http://localhost:11434/v1/models"}
+{"timestamp": "2026-04-04T11:54:54.796370", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: http://localhost:11434/v1 model=mistral"}
+{"timestamp": "2026-04-04T11:54:54.796720", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T11:54:54.800073", "layer": "llm_client", "level": "ERROR", "message": "Ollama not running on http://localhost:11434/v1/models"}
+{"timestamp": "2026-04-04T12:01:24.239344", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: http://localhost:11434/v1 model=mistral"}
+{"timestamp": "2026-04-04T12:01:24.239717", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T12:01:24.242511", "layer": "llm_client", "level": "ERROR", "message": "Ollama not running on http://localhost:11434/v1/models"}
+{"timestamp": "2026-04-04T12:01:30.379622", "layer": "alpaca_client", "level": "INFO", "message": "Connected via alpaca-py"}
+{"timestamp": "2026-04-04T12:05:46.451372", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: https://ruth-unfogged-joan.ngrok-free.dev/v1 model=mistral"}
+{"timestamp": "2026-04-04T12:05:46.451726", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T12:05:46.553303", "layer": "llm_client", "level": "ERROR", "message": "Ollama not running on https://ruth-unfogged-joan.ngrok-free.dev/v1/models"}
+{"timestamp": "2026-04-04T12:05:50.380151", "layer": "alpaca_client", "level": "INFO", "message": "Connected via alpaca-py"}
+{"timestamp": "2026-04-04T12:08:17.816007", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: https://ruth-unfogged-joan.ngrok-free.dev/v1 model=mistral"}
+{"timestamp": "2026-04-04T12:08:17.816393", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T12:08:18.498930", "layer": "openai._base_client", "level": "INFO", "message": "Retrying request to /models in 0.466520 seconds"}
+{"timestamp": "2026-04-04T12:08:19.571403", "layer": "httpx", "level": "INFO", "message": "HTTP Request: GET https://ruth-unfogged-joan.ngrok-free.dev/v1/models \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:08:21.344439", "layer": "alpaca_client", "level": "INFO", "message": "Connected via alpaca-py"}
+{"timestamp": "2026-04-04T12:08:51.339847", "layer": "llm_client", "level": "INFO", "message": "Ollama client connected: https://ruth-unfogged-joan.ngrok-free.dev/v1 model=mistral"}
+{"timestamp": "2026-04-04T12:08:51.339978", "layer": "layer.04.agent_core", "level": "INFO", "message": "ArmorClaw IAP configured: https://customer-iap.armoriq.ai"}
+{"timestamp": "2026-04-04T12:08:51.981473", "layer": "httpx", "level": "INFO", "message": "HTTP Request: GET https://ruth-unfogged-joan.ngrok-free.dev/v1/models \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:00.637330", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:00.651492", "layer": "layer.01.enforxguard_input_firewall", "level": "INFO", "status": "PASS", "detail": "All input checks passed"}
+{"timestamp": "2026-04-04T12:09:04.436733", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:04.440392", "layer": "layer.02.intent_formalization_(ife)", "level": "INFO", "status": "PASS", "detail": "SID=sid-20260404-001 action=research_only scope=['AAPL'] qty=1"}
+{"timestamp": "2026-04-04T12:09:04.440819", "layer": "layer.03.guided_reasoning_constraints", "level": "INFO", "status": "PASS", "detail": "Fence deployed: 1727 chars"}
+{"timestamp": "2026-04-04T12:09:07.202754", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:11.297695", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:14.056184", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:14.059779", "layer": "agents.deliberation", "level": "ERROR", "message": "compliance round 1: bad LLM response: Ollama response is not valid JSON: {\n  \"verdict\": \"MODIFY\",\n  \"confidence\": 95,\n  \"reason\": \"The declared intent is 'research_only', but the proposed action is to buy shares of AAPL which falls under the prohibited action 'trade'. Howe"}
+{"timestamp": "2026-04-04T12:09:17.547580", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:19.894645", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:22.120662", "layer": "httpx", "level": "INFO", "message": "HTTP Request: POST https://ruth-unfogged-joan.ngrok-free.dev/v1/chat/completions \"HTTP/1.1 200 OK\""}
+{"timestamp": "2026-04-04T12:09:22.123267", "layer": "layer.04.multi-agent_deliberation", "level": "WARNING", "status": "BLOCK", "detail": "delib_id=delib-20260404-001 veto=True duration=17681ms"}

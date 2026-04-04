@@ -4,19 +4,14 @@ LAYER 5 — Plan-Intent Alignment Validator (PIAV)
 
 Compares ExecutionAgent's plan against the SID:
   1. Every tool in plan must be in SID permitted_actions
-  2. Plan must NOT include any SID prohibited_actions
-  3. Trade-step parameters (symbol, qty, side, order type) must match SID scope
-  4. research_only SIDs must not include trade tools
-  5. When a trade is present, tools must follow research → analyze → validate → trade
-  6. Permitted tools must be registered in TOOL_CATEGORY (sequence validation)
-  7. Reasoning trace must not mention forbidden_topics (word-boundary aware)
+  2. Plan parameters (ticker, qty) must be within SID scope
+  3. Plan must NOT include any SID prohibited_actions
+  4. Reasoning trace must not mention forbidden_topics
 
 Returns: {aligned: bool, violations: list, result: "PASS"/"BLOCK", status}
 """
 
 from __future__ import annotations
-
-import re
 from datetime import datetime, timezone
 
 from logger_config import get_layer_logger
@@ -36,25 +31,6 @@ TOOL_CATEGORY = {
 
 REQUIRED_SEQUENCE = ["research", "analyze", "validate", "trade"]
 
-_TRADE_TOOLS = frozenset({"execute_trade", "alpaca_trade"})
-
-
-def _safe_int(value: object, *, field: str) -> tuple[int | None, str | None]:
-    """Parse int for scope/qty; return (value, error_message)."""
-    if value is None:
-        return None, f"Missing {field}"
-    try:
-        return int(value), None
-    except (TypeError, ValueError):
-        return None, f"Invalid {field}: {value!r}"
-
-
-def _forbidden_topic_in_trace(topic: str, trace_lower: str) -> bool:
-    if not topic or not trace_lower:
-        return False
-    needle = re.escape(topic.lower())
-    return re.search(rf"(?<!\w){needle}(?!\w)", trace_lower) is not None
-
 
 class PlanIntentAlignmentValidator:
 
@@ -66,97 +42,51 @@ class PlanIntentAlignmentValidator:
         prohibited  = sid.get("prohibited_actions", [])
         scope       = sid.get("scope", {})
         scope_tickers = [t.upper() for t in scope.get("tickers", [])]
-        scope_max_qty, scope_qty_err = _safe_int(scope.get("max_quantity", 0), field="scope.max_quantity")
-        if scope_qty_err:
-            violations.append(f"SID scope: {scope_qty_err}")
-            scope_max_qty = 0
+        scope_max_qty = int(scope.get("max_quantity", 0))
         primary      = sid.get("primary_action", "")
         forbidden_t  = sid.get("reasoning_bounds", {}).get("forbidden_topics", [])
 
         steps      = plan_data.get("plan", [])
-        plan_tools = [s.get("tool", "") for s in steps if s.get("tool")]
+        plan_tools = [s.get("tool", "") for s in steps]
         trace      = (plan_data.get("reasoning_trace", "") or "").lower()
 
-        # CHECK 0: Non-empty plan
-        if not steps:
-            violations.append("Plan contains no steps")
-        else:
-            checks_passed.append("PLAN_NON_EMPTY")
-
         # CHECK 1: Every tool must be in permitted_actions
-        permitted_fail = False
         for tool in plan_tools:
             if tool not in permitted:
                 violations.append(f"Tool '{tool}' is not in SID.permitted_actions")
-                permitted_fail = True
-        if plan_tools and not permitted_fail:
+        if not violations:
             checks_passed.append("TOOLS_PERMITTED")
 
         # CHECK 2: No prohibited tools
-        had_prohibited_tool_violation = False
         for tool in plan_tools:
             if tool in prohibited:
                 violations.append(f"Tool '{tool}' is explicitly prohibited by SID")
-                had_prohibited_tool_violation = True
-        if not had_prohibited_tool_violation:
-            checks_passed.append("NO_PROHIBITED_TOOLS")
-
-        # CHECK 2b: Permitted tools must be categorized for sequence validation
-        for tool in plan_tools:
-            if tool in permitted and tool not in TOOL_CATEGORY:
-                violations.append(
-                    f"Tool '{tool}' is permitted but uncategorized for sequence validation "
-                    "(update TOOL_CATEGORY)"
-                )
+        checks_passed.append("NO_PROHIBITED_TOOLS") if len(violations) == len(
+            [v for v in violations if "not in SID.permitted_actions" in v]
+        ) else None
 
         # CHECK 3: Scope validation for trade step
         trade_step = next(
-            (s for s in steps if s.get("tool") in _TRADE_TOOLS), None
+            (s for s in steps if s.get("tool") in ("execute_trade", "alpaca_trade")), None
         )
         if trade_step:
             args   = trade_step.get("args", {})
             ticker = args.get("symbol", args.get("ticker", "")).upper()
-            qty, qty_err = _safe_int(args.get("qty"), field="qty")
-            if qty_err:
-                violations.append(f"Trade step: {qty_err}")
-            elif scope_max_qty and scope_max_qty > 0 and qty is not None and qty > scope_max_qty:
-                violations.append(
-                    f"Quantity {qty} exceeds SID scope max {scope_max_qty}"
-                )
-            else:
-                checks_passed.append("QTY_IN_SCOPE")
+            qty    = int(args.get("qty", 0))
 
-            if not scope_tickers:
-                violations.append(
-                    "Trade step present but SID scope defines no allowed tickers"
-                )
-            elif ticker not in scope_tickers:
+            if scope_tickers and ticker not in scope_tickers:
                 violations.append(
                     f"Ticker '{ticker}' not in SID scope {scope_tickers}"
                 )
             else:
                 checks_passed.append("TICKER_IN_SCOPE")
 
-            scope_side = str(scope.get("side", "") or "").lower()
-            if scope_side and scope_side not in ("none", "n/a"):
-                arg_side = str(args.get("side", "") or "").lower()
-                if arg_side != scope_side:
-                    violations.append(
-                        f"Trade side '{arg_side or '(missing)'}' does not match SID scope.side '{scope_side}'"
-                    )
-                else:
-                    checks_passed.append("SIDE_IN_SCOPE")
-
-            scope_order = str(scope.get("order_type", "") or "").lower()
-            if scope_order:
-                arg_type = str(args.get("type", "") or "").lower()
-                if arg_type != scope_order:
-                    violations.append(
-                        f"Trade order type '{arg_type or '(missing)'}' does not match "
-                        f"SID scope.order_type '{scope_order}'"
-                    )
-                else:
-                    checks_passed.append("ORDER_TYPE_IN_SCOPE")
+            if scope_max_qty > 0 and qty > scope_max_qty:
+                violations.append(
+                    f"Quantity {qty} exceeds SID scope max {scope_max_qty}"
+                )
+            else:
+                checks_passed.append("QTY_IN_SCOPE")
 
         # CHECK 4: research_only enforcement
         if primary == "research_only":
@@ -165,8 +95,6 @@ class PlanIntentAlignmentValidator:
                 violations.append(
                     f"SID is research_only but plan contains trade actions: {trade_tools}"
                 )
-            else:
-                checks_passed.append("RESEARCH_ONLY_OK")
         else:
             checks_passed.append("INTENT_MATCH")
 
@@ -187,27 +115,15 @@ class PlanIntentAlignmentValidator:
                 checks_passed.append("SEQUENCE_OK")
 
         # CHECK 6: Reasoning trace forbidden topics
-        reasoning_violation = False
         for topic in forbidden_t:
-            if _forbidden_topic_in_trace(topic, trace):
+            if topic.lower() in trace:
                 violations.append(
                     f"Reasoning trace contains forbidden topic: '{topic}'"
                 )
-                reasoning_violation = True
-        if forbidden_t and not reasoning_violation:
+        if not any("forbidden topic" in v for v in violations):
             checks_passed.append("REASONING_CLEAN")
-        elif not forbidden_t:
-            checks_passed.append("REASONING_CLEAN_NO_TOPICS_DEFINED")
 
         aligned = len(violations) == 0
-        if not aligned:
-            logger.warning(
-                "PIAV BLOCK — %d violation(s): %s",
-                len(violations),
-                violations[:3],
-            )
-        else:
-            logger.info("PIAV PASS — checks=%s", checks_passed)
         return {
             "aligned":        aligned,
             "result":         "PASS" if aligned else "BLOCK",

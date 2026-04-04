@@ -9,21 +9,104 @@ Returns:
 
 ArmorClaw CSRG + Merkle proofs are generated on the FINAL consensus plan.
 If deliberation blocks, CSRG is skipped and the block is sent directly to audit.
+
+ArmorClaw Integration:
+  1. POST execution plan to ArmorIQ IAP (customer-iap.armoriq.ai) → intent token
+     with per-step cryptographic proofs.
+  2. Fallback: OpenClaw CLI (openclaw run --csrg) if IAP unreachable.
+  3. Fallback: deterministic SHA-256 stub (CSRG-STUB-...) for offline use.
+
+Required env vars (optional — stub used if absent):
+  ARMORIQ_API_KEY   — ArmorIQ API key from platform.armoriq.ai
+  IAP_ENDPOINT      — IAP base URL (default: https://customer-iap.armoriq.ai)
 """
 
 from __future__ import annotations
 import json
 import os
 import subprocess
+import requests
+from pathlib import Path
+from dotenv import load_dotenv
 from logger_config import get_layer_logger
+from agents.deliberation import DeliberationOrchestrator
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 logger = get_layer_logger("layer.04.agent_core")
+
+_PLACEHOLDER = "<your-armoriq-api-key>"
+
+
+class ArmorClawClient:
+    """
+    Client for ArmorIQ's Intent Access Proxy (IAP).
+
+    Flow (per ArmorClaw architecture):
+      1. POST execution plan to IAP → receive intent token with per-step proofs.
+      2. Token is attached to the plan as the CSRG proof consumed by Layer 5+.
+
+    Falls back silently when ARMORIQ_API_KEY is absent or the IAP is unreachable.
+    """
+
+    def __init__(self):
+        self._api_key = os.getenv("ARMORIQ_API_KEY", "")
+        self._iap_url = os.getenv("IAP_ENDPOINT", "https://customer-iap.armoriq.ai").rstrip("/")
+        self._available = bool(self._api_key and self._api_key != _PLACEHOLDER)
+        if self._available:
+            logger.info("ArmorClaw IAP configured: %s", self._iap_url)
+        else:
+            logger.debug("ARMORIQ_API_KEY not set — CSRG will use stub fallback")
+
+    def request_intent_token(self, plan: dict, sid: dict) -> dict | None:
+        """
+        POST the execution plan to the ArmorIQ IAP to receive a cryptographic
+        intent token with per-step proofs.
+
+        Returns the parsed response dict on success, None on any failure.
+        """
+        if not self._available:
+            return None
+
+        payload = {
+            "sid_id":         sid.get("sid_id"),
+            "primary_action": sid.get("primary_action"),
+            "plan_steps":     plan.get("plan", []),
+            "context": {
+                "tickers":    sid.get("scope", {}).get("tickers", []),
+                "side":       sid.get("scope", {}).get("side"),
+                "order_type": sid.get("scope", {}).get("order_type"),
+            },
+        }
+
+        try:
+            resp = requests.post(
+                f"{self._iap_url}/v1/intent/token",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type":  "application/json",
+                },
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+            logger.warning("ArmorIQ IAP returned HTTP %s: %s",
+                           resp.status_code, resp.text[:200])
+            return None
+        except requests.exceptions.Timeout:
+            logger.warning("ArmorIQ IAP timed out — falling back to stub")
+            return None
+        except Exception as exc:
+            logger.debug("ArmorIQ IAP call failed: %s", exc)
+            return None
 
 
 class AgentCore:
 
     def __init__(self):
         self._orchestrator = DeliberationOrchestrator()
+        self._armorclaw    = ArmorClawClient()
 
     @property
     def leader(self):
@@ -108,25 +191,42 @@ class AgentCore:
     # ── CSRG via ArmorClaw ──────────────────────────────────────────────────
 
     def _generate_csrg(self, plan: dict, sid: dict) -> str:
-        """Try to generate ArmorClaw CSRG proof. Returns stub string on failure."""
+        """
+        Generate ArmorClaw CSRG proof for the execution plan.
+
+        Priority:
+          1. ArmorIQ IAP HTTP call → cryptographic intent token with per-step proofs
+          2. OpenClaw CLI  (openclaw run --csrg)  — legacy / local gateway
+          3. Deterministic SHA-256 stub            — offline / unconfigured fallback
+        """
+        import hashlib
         sid_id = sid.get("sid_id", "unknown")
 
-        # Attempt openclaw run --csrg if available
+        # 1. ArmorIQ IAP — preferred path
+        token_resp = self._armorclaw.request_intent_token(plan, sid)
+        if token_resp:
+            intent_token = token_resp.get("intent_token", "")
+            if intent_token:
+                logger.info("ArmorClaw intent token issued (sid=%s)", sid_id)
+                return str(intent_token)[:256]
+
+        # 2. OpenClaw CLI — local gateway fallback
         try:
             plan_json = json.dumps(plan, default=str)
             result = subprocess.run(
                 ["openclaw", "run", "--csrg", "--input", plan_json[:1000]],
-                capture_output=True, text=True, timeout=10
+                capture_output=True, text=True, timeout=10,
             )
             if result.returncode == 0 and result.stdout.strip():
+                logger.debug("ArmorClaw CLI CSRG generated (sid=%s)", sid_id)
                 return result.stdout.strip()[:256]
         except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as exc:
-            logger.debug("ArmorClaw CSRG unavailable: %s", exc)
+            logger.debug("ArmorClaw CLI unavailable: %s", exc)
 
-        # Fallback: deterministic stub proof
-        import hashlib
+        # 3. Deterministic stub — offline fallback
         content = json.dumps(plan, sort_keys=True, default=str)
         h       = hashlib.sha256(content.encode()).hexdigest()[:32]
+        logger.debug("CSRG stub generated (sid=%s)", sid_id)
         return f"CSRG-STUB-{sid_id}-{h}"
 
 
@@ -151,8 +251,8 @@ def test_agent_core():
     result = core.run(grc, "Buy 5 AAPL", sid)
     print(f"  Status    : {result['status']}")
     print(f"  Consensus : {result['deliberation_result']['final_consensus']}")
-    print(f"  Plan steps: {[s['tool'] for s in result.get('plan', [])]}")
-    print(f"  CSRG      : {result['csrg_proof'][:50]}...")
+    print(f"  Plan steps: {[s['tool'] for s in (result.get('plan') or [])]}")
+    print(f"  CSRG      : {(result.get('csrg_proof') or '')[:50]}...")
     print()
 
 

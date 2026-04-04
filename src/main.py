@@ -118,7 +118,7 @@ def run_pipeline(
     try:
         from llm_client import OpenClawClient
         if not OpenClawClient().is_available():
-            print(f"  {Y}⚠ WARNING: OpenClaw Gateway unreachable! Pipeline will fail on LLM calls.{RST}")
+            print(f"  {Y}⚠ WARNING: Ollama unreachable! Pipeline will fail on LLM calls.{RST}")
     except Exception:
         pass
 

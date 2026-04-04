@@ -132,11 +132,11 @@ class DeliberationOrchestrator:
         try:
             return agent.deliberate(sid, grc_prompt, others, round_num)
         except ConnectionError as exc:
-            logger.error("%s round %d: OpenClaw unreachable: %s", agent.NAME, round_num, exc)
+            logger.error("%s round %d: Ollama unreachable: %s", agent.NAME, round_num, exc)
             return {
                 "verdict": "ERROR",
                 "confidence": 0,
-                "reason": f"{agent.NAME}: OpenClaw unreachable — {exc}",
+                "reason": f"{agent.NAME}: Ollama unreachable — {exc}",
                 "source": "error",
                 "suggested_modification": None,
             }

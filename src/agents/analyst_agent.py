@@ -39,7 +39,7 @@ class AnalystAgent:
         """Return {verdict, confidence, reason, response_to_others (round 2 only)}."""
         user_msg = self._build_prompt(sid, grc_prompt, others_output, round_num)
         
-        # This WILL raise ConnectionError if OpenClaw is down.
+        # This WILL raise ConnectionError if Ollama is down.
         # The deliberation orchestrator handles the error.
         result = self._llm.chat_json(PERSONA, user_msg, temperature=0.3, max_tokens=400)
         return self._validate_response(result, round_num)

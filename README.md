@@ -4,7 +4,7 @@
 
 > A 10-layer safety pipeline with multi-agent deliberation that validates every step from user intent to trade execution — making each decision provable, deterministic, and auditable.
 
-**Live Stack:** OpenClaw Gateway · ArmorClaw (ArmorIQ) · GPT-OSS 120B via HuggingFace Router · Alpaca Paper Trading API
+**Live Stack:** OpenClaw Gateway · ArmorClaw (ArmorIQ) · Mistral via local Ollama · Alpaca Paper Trading API
 
 ---
 
@@ -147,7 +147,7 @@ OpenClaw Gateway  (port 18789, HTTP endpoint: /v1/chat/completions)
 ArmorIQ IAP  →  intent token issued  →  step proofs verified
     │
     ▼
-HuggingFace Router  →  GPT-OSS 120B model inference
+Ollama  →  Mistral (local model inference)
     │
     ▼
 Response returned through ArmorClaw (proof attached)  →  back to agent
@@ -198,7 +198,9 @@ ENFORX/
 | Requirement | Version | Notes |
 |-------------|---------|-------|
 | Python | 3.10+ | 3.9 also supported |
-| OpenClaw | 2026.4.x | Must be running locally on port 18789 |
+| Ollama | latest | Must be running locally: `ollama serve` |
+| mistral model | — | Pull once: `ollama pull mistral` |
+| OpenClaw | 2026.4.x | Required for ArmorClaw plugin only |
 | ArmorClaw plugin | v0.0.1+ | Installed via `openclaw plugins install @armoriq/armorclaw` |
 | ArmorIQ API Key | — | From [platform.armoriq.ai](https://platform.armoriq.ai) → API Dashboard |
 | Alpaca Paper Account | — | From [alpaca.markets](https://alpaca.markets) — free paper trading |
@@ -223,50 +225,36 @@ cp .env.template .env
 # Edit .env with your actual credentials (see Environment Variables section)
 ```
 
-### OpenClaw Gateway Configuration
+### Ollama Setup
 
-ENFORX routes **all LLM inference** through the OpenClaw gateway. Two one-time configurations are required:
+ENFORX routes **all LLM inference** through a local Ollama instance. One-time setup:
 
-#### 1. Enable the HTTP Inference API
-
-OpenClaw's OpenAI-compatible HTTP API is disabled by default for security. Enable it by adding the following to `~/.openclaw/openclaw.json` under the `"gateway"` key:
-
-```json
-"http": {
-  "endpoints": {
-    "chatCompletions": {
-      "enabled": true
-    }
-  }
-}
-```
-
-Then restart the gateway:
+#### 1. Install and start Ollama
 
 ```bash
-openclaw gateway restart
+# Install from https://ollama.com
+# Then pull the model
+ollama pull mistral
+
+# Ollama starts automatically, or run manually:
+ollama serve
 ```
 
-**Verify the endpoint is live** — this should return `{"object":"list","data":[...]}`, not HTML:
+**Verify Ollama is up** — this should return `{"object":"list","data":[...]}`:
 
 ```bash
-curl -H "Authorization: Bearer <your-openclaw-token>" \
-     http://127.0.0.1:18789/v1/models
+curl http://localhost:11434/v1/models
 ```
 
-> Your gateway token is the value of `gateway.auth.token` in `~/.openclaw/openclaw.json`.
-> It must match `OPENCLAW_API_KEY` in your `.env`.
+#### 2. Confirm the model ID
 
-#### 2. Confirm the gateway model ID
-
-When calling `/v1/chat/completions`, the model ID is the **gateway-level identifier**, not the upstream HuggingFace model name. ENFORX uses:
+ENFORX uses:
 
 ```
-MODEL_ID=openclaw
+MODEL_ID=mistral
 ```
 
-Available model IDs (returned by `/v1/models`): `openclaw`, `openclaw/default`, `openclaw/main`.
-OpenClaw internally routes `openclaw` to whichever model is set as `agents.defaults.model.primary` in `openclaw.json` — currently `huggingface/openai/gpt-oss-120b`.
+No API key is needed — Ollama runs locally.
 
 ### ArmorClaw Plugin
 
@@ -304,15 +292,9 @@ The plugin config in `~/.openclaw/openclaw.json` should contain:
 Copy `.env.template` to `.env` and fill in your credentials:
 
 ```bash
-# ── OpenClaw Gateway ──────────────────────────────────────────────
-OPENCLAW_BASE_URL=http://127.0.0.1:18789/v1
-OPENCLAW_GATEWAY=ws://127.0.0.1:18789
-# Must match gateway.auth.token in ~/.openclaw/openclaw.json
-OPENCLAW_API_KEY=<your-openclaw-gateway-token>
-
-# ── LLM Model ─────────────────────────────────────────────────────
-# Gateway-level model ID — routes to huggingface/openai/gpt-oss-120b
-MODEL_ID=openclaw
+# ── Ollama (local LLM) — no API key required ──────────────────────
+OPENCLAW_BASE_URL=http://localhost:11434/v1
+MODEL_ID=mistral
 
 # ── ArmorIQ ───────────────────────────────────────────────────────
 ARMORIQ_API_KEY=<your-armoriq-api-key>
@@ -354,17 +336,16 @@ Expected output when everything is correctly configured:
 ```
 ENFORX Health Check
 ========================================
-  OpenClaw Gateway : CONNECTED
+  Ollama (LLM)     : CONNECTED
   Alpaca Paper     : CONNECTED (cash=$99254.41)
   Policy File      : FOUND
 ========================================
 ```
 
-A `CONNECTED` status for the OpenClaw Gateway confirms:
-- The gateway is running on port 18789
-- The `chatCompletions` HTTP endpoint is enabled
-- The Bearer token in `.env` matches `openclaw.json`
-- ArmorClaw is intercepting and verifying requests
+A `CONNECTED` status for Ollama confirms:
+- Ollama is running locally (`ollama serve`)
+- The `mistral` model is pulled and available
+- The `/v1/models` endpoint is responding with valid JSON
 
 ### CLI Mode
 

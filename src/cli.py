@@ -25,13 +25,13 @@ def health_check():
     print("ENFORX Health Check")
     print("=" * 40)
     
-    # OpenClaw
+    # Ollama (local LLM)
     try:
         client = OpenClawClient()
         ok = client.is_available()
-        print(f"  OpenClaw Gateway : {'CONNECTED' if ok else 'UNREACHABLE'}")
+        print(f"  Ollama (LLM)     : {'CONNECTED' if ok else 'UNREACHABLE'}")
     except Exception as e:
-        print(f"  OpenClaw Gateway : ERROR — {e}")
+        print(f"  Ollama (LLM)     : ERROR — {e}")
 
     # Alpaca
     try:

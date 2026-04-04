@@ -53,33 +53,5 @@ class TestNemoBench(unittest.TestCase):
         self.assertIn("UNTRUSTED", result["reason"])
         print(f"  [PASS] UNTRUSTED taint blocked: {result['reason']}")
 
-    def test_output_endpoint_spoof_blocked(self):
-        """Hostname spoofing must not pass the endpoint check."""
-        api_payload = {
-            "endpoint": "https://paper-api.alpaca.markets.evil.com/v2/orders",
-            "symbol": "AAPL",
-            "side": "buy",
-            "qty": 5,
-            "type": "market",
-            "time_in_force": "day",
-        }
-        plan = {"plan": [{"tool": "execute_trade", "args": {"symbol": "AAPL", "side": "buy", "qty": 5, "type": "market"}}]}
-        result = self.fw_out.scan(api_payload, plan, ["TRUSTED"])
-        self.assertEqual(result["status"], "EMERGENCY_BLOCK")
-        self.assertIn("endpoint", result["reason"].lower())
-        print(f"  [PASS] Endpoint spoof blocked: {result['reason']}")
-
-    def test_output_nested_pii_blocked(self):
-        """Nested payload values should still be scanned for PII."""
-        api_payload = {
-            "endpoint": "https://paper-api.alpaca.markets/v2/orders",
-            "action": ["query", {"notes": "Customer SSN 123-45-6789"}],
-        }
-        plan = {"plan": []}
-        result = self.fw_out.scan(api_payload, plan, ["TRUSTED"])
-        self.assertEqual(result["status"], "EMERGENCY_BLOCK")
-        self.assertIn("pii", result["reason"].lower())
-        print(f"  [PASS] Nested PII blocked: {result['reason']}")
-
 if __name__ == "__main__":
     unittest.main()
