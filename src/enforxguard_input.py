@@ -68,6 +68,9 @@ class InputFirewall:
             for pat in p["enforxguard_rules"]["input_firewall"]["injection_patterns"]
         ]
         self._trust_levels: dict[str, str] = p["data_constraints"]["trust_levels"]
+        tc = p["trade_constraints"]
+        self._allowed_tickers: list[str] = [t.upper() for t in tc["allowed_tickers"]]
+        self._max_per_order: int = tc["max_per_order"]
         # Rate-limit window: store call timestamps (last 60 s)
         self._call_times: deque[float] = deque()
         try:
@@ -136,7 +139,12 @@ class InputFirewall:
         if re.search(r"\b\d{3}-\d{2}-\d{4}\b", user_input):
             return self._block(raw, "PII_DETECTED", "SSN pattern in input", source)
 
-        # CHECK 7: Semantic LLM-based scan
+        # CHECK 7: Financial hard limits (fast-fail before expensive LLM/agent layers)
+        fin_issue = self._check_financial_limits(user_input)
+        if fin_issue:
+            return self._block(raw, "FINANCIAL_LIMIT", fin_issue, source)
+
+        # CHECK 8: Semantic LLM-based scan
         if self._llm:
             try:
                 semantic = self._semantic_scan(user_input)
@@ -165,11 +173,39 @@ class InputFirewall:
                 "timestamp":   datetime.now(timezone.utc).isoformat(),
             },
             "checks_passed": [
-                "RATE_LIMIT", "LENGTH", "ENCODING", "INJECTION", "URL", "CREDENTIAL_SCAN", "PII_SCAN"
+                "RATE_LIMIT", "LENGTH", "ENCODING", "INJECTION", "URL",
+                "CREDENTIAL_SCAN", "PII_SCAN", "FINANCIAL_LIMITS",
             ],
         }
 
     # ── Private helpers ─────────────────────────────────────────────────────
+
+    def _check_financial_limits(self, text: str) -> str | None:
+        """Fast-fail: catch extreme quantities and denied tickers at the input layer."""
+        # Hard quantity ceiling: anything above max_per_order * 100 is clearly excessive
+        hard_ceiling = self._max_per_order * 100
+        for m in re.finditer(r"\b(\d+)\s+shares?\b", text, re.IGNORECASE):
+            qty = int(m.group(1))
+            if qty > hard_ceiling:
+                return (
+                    f"Quantity {qty} shares exceeds input hard ceiling "
+                    f"({hard_ceiling}); policy max_per_order={self._max_per_order}"
+                )
+
+        # Denied ticker: trade intent combined with a ticker not on the allowed list
+        trade_match = re.search(r"\b(buy|sell|purchase|trade|order)\b", text, re.IGNORECASE)
+        if trade_match:
+            found_tickers = re.findall(
+                r"\b(AAPL|MSFT|GOOGL|AMZN|NVDA|GOOG|TSLA|META|NFLX|GME|AMC)\b",
+                text.upper(),
+            )
+            denied = [t for t in found_tickers if t not in self._allowed_tickers]
+            if denied:
+                return (
+                    f"Trade request references denied ticker(s): {denied}. "
+                    f"Allowed: {self._allowed_tickers}"
+                )
+        return None
 
     def _semantic_scan(self, user_input: str) -> dict:
         prompt = (

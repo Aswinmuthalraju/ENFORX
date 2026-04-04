@@ -95,7 +95,7 @@ class OpenClawClient:
             raise ConnectionError(error_msg) from exc
 
     def chat_json(self, system_prompt: str, user_message: str,
-                  temperature: float = 0.1, max_tokens: int = 500) -> dict:
+                  temperature: float = 0.1, max_tokens: int = 800) -> dict:
         """Send a chat completion and parse JSON response.
 
         Raises ConnectionError if Ollama is unreachable.

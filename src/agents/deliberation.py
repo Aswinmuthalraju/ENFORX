@@ -34,7 +34,17 @@ class DeliberationOrchestrator:
         return self._leader
 
     def run(self, sid: dict, grc_prompt: str, firewall_result: dict | None = None) -> dict:
-        return asyncio.run(self.run_async(sid, grc_prompt, firewall_result or {"status": "PASS"}))
+        coro = self.run_async(sid, grc_prompt, firewall_result or {"status": "PASS"})
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result()
+        return asyncio.run(coro)
 
     async def run_async(self, sid: dict, grc_prompt: str, firewall_result: dict) -> dict:
         start_ms = int(time.time() * 1000)

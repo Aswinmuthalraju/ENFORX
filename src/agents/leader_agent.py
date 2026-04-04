@@ -136,6 +136,7 @@ class LeaderAgent:
         decision = "APPROVE"
 
         if veto:
+            decision = "BLOCK"
             reasons.append("Risk veto triggered - concur with BLOCK")
 
         elif self._anomaly_count >= ESCALATION_THRESHOLD * 2:

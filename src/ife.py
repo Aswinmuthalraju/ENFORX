@@ -95,9 +95,15 @@ class IntentFormalizationEngine:
             "scope: {tickers: list, max_quantity: int, order_type: string, side: string}, "
             "reasoning_bounds: {allowed_topics: list, forbidden_topics: list}, "
             "ambiguity_flags: list, resolution_method: string\n\n"
-            f"User input: \"{user_input}\"\n"
-            "When in doubt, set primary_action=research_only and leave execute_trade "
-            "out of permitted_actions. Never include prohibited tickers like TSLA."
+            f"User input: \"{user_input}\"\n\n"
+            "CLASSIFICATION RULES:\n"
+            "- Set primary_action=execute_trade when the user uses a clear trade verb "
+            "(buy/sell/purchase) with a specific ticker AND quantity — even if a price "
+            "condition is given (e.g. 'if price is under 200' is a price trigger, NOT ambiguity).\n"
+            "- Set primary_action=research_only ONLY when the user expresses uncertainty "
+            "('maybe', 'should I', 'consider', 'think about') or gives no specific action.\n"
+            "- A price condition like 'if price < X' signals order_type=limit, not ambiguity.\n"
+            "- Never include prohibited tickers like TSLA."
         )
         system_prompt = "You are a financial intent parser. Parse user intent into a strict SID schema."
         
@@ -180,8 +186,11 @@ class IntentFormalizationEngine:
         if "force leader override" in text:
             sid["force_degraded_agents"] = True
 
-        # Ambiguity: conditional intent
-        if re.search(r"\b(if|when|maybe|consider|might|should i|think about)\b", text):
+        # Ambiguity: conditional intent — only when conditional PRECEDES the trade verb
+        # e.g. "maybe buy AAPL" → ambiguous; "buy AAPL if price < 200" → NOT ambiguous
+        conditional_match = re.search(r"\b(if|when|maybe|consider|might|should i|think about)\b", text)
+        trade_verb_match  = re.search(r"\b(buy|sell|purchase|trade|order)\b", text)
+        if conditional_match and (not trade_verb_match or conditional_match.start() < trade_verb_match.start()):
             if "execute_trade" in sid.get("permitted_actions", []):
                 sid["permitted_actions"].remove("execute_trade")
             sid["primary_action"]  = "research_only"
