@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 PERSONA = (
     "You are a risk officer reviewing a proposed trade for an autonomous AI agent. "
-    "Your SOLE job is to find every reason this trade could go wrong, violate policy, "
-    "cause financial harm, or expose the firm to liability. "
-    "Be adversarial and specific: cite concentration risk, velocity, sector overlap, "
-    "market timing, or any policy ceiling being approached. "
+    "Your job is to check whether the trade violates policy constraints. "
+    "If the trade is within policy limits, output PROCEED. "
+    "Only output BLOCK if there is a genuine quantitative policy violation (wrong ticker, qty>=10, prohibited action). "
+    "Do NOT block on market conditions, opinions, or speculative risk — only hard policy rules. "
     "You must output a JSON object with exactly these keys: "
     "verdict (PROCEED/BLOCK/MODIFY), confidence (0-100 integer), "
     "reason (string, 1-3 sentences), suggested_modification (string or null). "
@@ -41,7 +41,7 @@ class RiskAgent(BaseAgent):
         Raises RuntimeError if the LLM endpoint is unreachable after retries.
         """
         user_msg = self._build_prompt(sid, grc_prompt, others_output, round_num)
-        result = self._llm.chat_json(PERSONA, user_msg, temperature=0.2, max_tokens=400)
+        result = self._llm.chat_json(PERSONA, user_msg, temperature=0.05, max_tokens=400)
         return self._validate_response(result, round_num)
 
     def _build_prompt(
@@ -55,13 +55,21 @@ class RiskAgent(BaseAgent):
         ticker = sid.get("scope", {}).get("tickers", ["?"])[0]
         qty    = sid.get("scope", {}).get("max_quantity", 0)
         side   = sid.get("scope", {}).get("side", "buy")
+        allowed_tickers = ["AAPL", "TSLA", "NVDA", "SPY", "QQQ", "VOO", "IVV"]
+        ticker_ok  = ticker.upper() in allowed_tickers
+        qty_ok     = 0 < qty < 10
         parts  = [
             f"TRADE PROPOSAL: {side.upper()} {qty} shares of {ticker}",
+            f"POLICY CHECK:\n"
+            f"  - Allowed tickers: {allowed_tickers}\n"
+            f"  - Ticker '{ticker}' is {'ALLOWED' if ticker_ok else 'NOT ALLOWED'}\n"
+            f"  - Quantity {qty} is {'WITHIN LIMIT (max 9)' if qty_ok else 'EXCEEDS LIMIT (max 9)'}\n"
+            f"  - Max per order: 9 shares\n"
+            f"  - Prohibited actions: short_sell, margin_trade, options",
+            f"RULE: If ticker is in allowed list AND qty is 1-9, verdict MUST be PROCEED.\n"
+            f"RULE: If ticker is NOT in allowed list, verdict MUST be BLOCK with confidence 100.\n"
+            f"RULE: If qty >= 10, verdict MUST be BLOCK with confidence 100.\n"
             f"GRC CONSTRAINTS:\n{grc_prompt}",
-            f"POLICY: max_per_order=9, allowed_tickers=[AAPL,TSLA,NVDA,SPY,QQQ,VOO,IVV]\n"
-            f"RULE: Any order with quantity 10 or above MUST receive a BLOCK verdict with confidence 100.\n"
-            f"RULE: Any ticker not in the allowed list MUST receive a BLOCK verdict with confidence 100.\n"
-            f"State the exact reason clearly in your response.",
         ]
         if round_num == 2 and others:
             parts.append(

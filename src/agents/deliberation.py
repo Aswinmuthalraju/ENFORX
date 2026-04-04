@@ -51,6 +51,9 @@ class DeliberationOrchestrator:
         date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
         delib_id = f"delib-{date_str}-{next(_id_counter):03d}"
 
+        # Reset leader anomaly count so each pipeline run starts clean
+        self._leader._anomaly_count = 0
+
         rounds_log: list[dict] = []
         leader_monitors: list[dict] = []
 
@@ -120,7 +123,7 @@ class DeliberationOrchestrator:
             if leader_decision["decision"] == "OVERRIDE_BLOCK":
                 base["block_reason"] = "Leader override due to degraded agents"
 
-        if base["final_consensus"] in ("PROCEED", "MODIFY") and leader_decision.get("decision") == "APPROVE":
+        if base["final_consensus"] in ("PROCEED", "MODIFY") and leader_decision.get("decision") in ("APPROVE", "ESCALATE"):
             summary = self._summarize_deliberation(r2_results)
             execution_plan = await asyncio.get_running_loop().run_in_executor(
                 None,

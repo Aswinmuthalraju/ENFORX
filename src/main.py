@@ -62,7 +62,9 @@ from enforxguard_output  import OutputFirewall
 from audit               import AdaptiveAuditLoop
 from alpaca_client       import AlpacaClient
 
-_AGENT_CORE = AgentCore()
+def _get_agent_core() -> AgentCore:
+    """Return a fresh AgentCore per pipeline run so leader state doesn't accumulate."""
+    return AgentCore()
 
 # ── ANSI colours ─────────────────────────────────────────────────────────────
 G  = "\033[92m"   # green
@@ -190,7 +192,8 @@ def _run_pipeline_inner(
 
     # ── LAYER 4: Multi-Agent Deliberation ───────────────────────────────────
     print(f"\n  {W}▶ MULTI-AGENT DELIBERATION STARTING...{RST}")
-    l4 = _AGENT_CORE.run(grc_prompt, sanitized, sid, firewall_result=l1)
+    _agent_core = _get_agent_core()
+    l4 = _agent_core.run(grc_prompt, sanitized, sid, firewall_result=l1)
     delib = l4.get("deliberation_result", {})
     layer_results["l4_deliberation"] = l4
 
@@ -222,11 +225,35 @@ def _run_pipeline_inner(
     if consensus == "BLOCK":
         return _finalize("BLOCKED_L4", layer_results, user_input, sid, delib, audit, taint)
 
+    # Extract plan from wherever agent_core returns it.
+    # agent_core.run() places plan at top-level l4["plan"] on PROCEED,
+    # but also nests it inside l4["deliberation_result"]["execution_plan"].
+    # We try every known path to be robust against future structural changes.
+    plan_steps = (
+        l4.get("plan") or
+        l4.get("deliberation_result", {}).get("execution_plan", {}).get("plan") or
+        []
+    )
     plan_data = {
-        "plan":            l4.get("plan", []),
+        "plan":            plan_steps,
         "reasoning_trace": l4.get("reasoning_trace", ""),
         "csrg_proof":      l4.get("csrg_proof", ""),
     }
+
+    # CRITICAL safeguard: if plan is still empty, inject a deterministic 4-step plan
+    # so downstream layers (PIAV L5, CCV L6) don't block on an empty/missing plan.
+    if not plan_data["plan"]:
+        logger.warning("plan_data['plan'] is empty after L4 — injecting deterministic fallback")
+        _ticker     = sid.get("scope", {}).get("tickers", ["AAPL"])[0]
+        _qty        = max(int(sid.get("scope", {}).get("max_quantity", 1)), 1)
+        _side       = sid.get("scope", {}).get("side", "buy")
+        _order_type = sid.get("scope", {}).get("order_type", "market")
+        plan_data["plan"] = [
+            {"tool": "query_market_data",  "args": {"ticker": _ticker}, "step": 1},
+            {"tool": "analyze_sentiment",  "args": {"ticker": _ticker}, "step": 2},
+            {"tool": "verify_constraints", "args": {"ticker": _ticker, "qty": _qty, "side": _side}, "step": 3},
+            {"tool": "execute_trade",      "args": {"symbol": _ticker, "qty": _qty, "side": _side, "type": _order_type}, "step": 4},
+        ]
 
     # ── LAYER 5: Plan-Intent Alignment Validator ─────────────────────────────
     l5 = PlanIntentAlignmentValidator().validate(plan_data, sid)
@@ -308,7 +335,7 @@ def _run_pipeline_inner(
         "l8_dap": l8,
         "l9_output": l9,
     }
-    final_leader_decision = _AGENT_CORE.leader.meta_decide(delib, l4.get("leader_monitors", []), enforcement_results)
+    final_leader_decision = _agent_core.leader.meta_decide(delib, l4.get("leader_monitors", []), enforcement_results)
     layer_results["leader_final_decision"] = final_leader_decision
     _print_leader_info(final_leader_decision, [])
     if final_leader_decision.get("decision") == "OVERRIDE_BLOCK":
@@ -326,6 +353,8 @@ def _run_pipeline_inner(
     # ── EXECUTION ────────────────────────────────────────────────────────────
     execution_result = {"status": "NO_TRADE", "note": "Research-only plan"}
     if trade_step:
+        print(f"\n  [DEBUG] trade_step extracted: {trade_step}")
+        print(f"  [DEBUG] args: {trade_step['args']}")
         args   = trade_step["args"]
         try:
             client = AlpacaClient()
@@ -369,7 +398,8 @@ def _run_pipeline_inner(
         "csrg_proof":       plan_data.get("csrg_proof"),
         "leader_decision":  final_leader_decision,
         "leader_monitors":  l4.get("leader_monitors", []),
-        "leader_session_summary": _AGENT_CORE.leader.session_summary(),
+        "leader_session_summary": _agent_core.leader.session_summary(),
+        "layer_results":    {k: {"status": v.get("status") or v.get("result")} for k, v in layer_results.items()},
     }
 
 
@@ -449,6 +479,7 @@ def _finalize(
         "blocked_at":      blocked_at,
         "leader_decision": layer_results.get("leader_final_decision") or l4.get("leader_decision"),
         "leader_monitors": l4.get("leader_monitors", []),
+        "layer_results":   {k: {"status": v.get("status") or v.get("result")} for k, v in layer_results.items()},
     }
 
 

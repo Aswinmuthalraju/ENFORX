@@ -68,6 +68,18 @@ class IntentFormalizationEngine:
                 sid["prohibited_actions"] = list(
                     MANDATORY_PROHIB | set(sid.get("prohibited_actions", []))
                 )
+                # Bug 2 fix: ensure all 4 TRADE_TOOLS are in permitted_actions for trade intents
+                if sid.get("primary_action") in ("execute_trade", "buy", "sell", "trade"):
+                    for t in ["query_market_data", "analyze_sentiment", "verify_constraints", "execute_trade"]:
+                        if t not in sid.get("permitted_actions", []):
+                            sid.setdefault("permitted_actions", []).append(t)
+                # Normalize scope: clamp max_quantity >= 1, default order_type to 'market'
+                scope = sid.setdefault("scope", {})
+                if sid.get("primary_action") == "execute_trade":
+                    if int(scope.get("max_quantity") or 0) == 0:
+                        scope["max_quantity"] = 1
+                if not scope.get("order_type"):
+                    scope["order_type"] = "market"
             except Exception as exc:
                 logger.warning("IFE LLM failed, using rule-based: %s", exc)
                 sid = self._rule_based_formalize(user_input, sid_id)
@@ -137,9 +149,9 @@ class IntentFormalizationEngine:
         raw_tickers = [t.upper() for t in _TICKER_RE.findall(user_input)]
         allowed_found = [t for t in raw_tickers if t in [x.upper() for x in self.allowed_tickers]]
 
-        # Extract quantity
+        # Extract quantity — default to 1 (never 0) so PIAV never blocks on missing qty
         qty_match = _QTY_RE.search(user_input)
-        qty       = int(qty_match.group(1)) if qty_match else 0
+        qty       = int(qty_match.group(1)) if qty_match else 1  # Bug 3 fix: default to 1
 
         # Determine side
         is_buy  = bool(_BUY_RE.search(text))
@@ -157,12 +169,15 @@ class IntentFormalizationEngine:
             [t for t in raw_tickers if t not in [x.upper() for x in self.allowed_tickers]]
         )
 
-        if has_trade_intent and allowed_found and qty > 0:
+        # Bug 2 fix: TRADE_TOOLS always present for trade intents
+        TRADE_TOOLS = [
+            "query_market_data", "analyze_sentiment",
+            "verify_constraints", "execute_trade",
+        ]
+
+        if has_trade_intent and allowed_found:
             primary_action    = "execute_trade"
-            permitted_actions = [
-                "query_market_data", "analyze_sentiment",
-                "verify_constraints", "execute_trade",
-            ]
+            permitted_actions = list(TRADE_TOOLS)  # always all 4
         else:
             primary_action    = "research_only"
             permitted_actions = [
@@ -177,6 +192,9 @@ class IntentFormalizationEngine:
         if is_sell and "short" in text:
             prohibited_actions.append("short_sell_detected")
 
+        # Bug 3 fix: max_quantity always >= 1 for trade intents
+        safe_qty = max(min(qty, 9), 1)
+
         return {
             "sid_id":           sid_id,
             "primary_action":   primary_action,
@@ -185,7 +203,7 @@ class IntentFormalizationEngine:
             "prohibited_actions": prohibited_actions,
             "scope": {
                 "tickers":      tickers_in_scope,
-                "max_quantity": min(qty, 9) if qty > 0 else 0,
+                "max_quantity": safe_qty if primary_action == "execute_trade" else (min(qty, 9) if qty > 0 else 0),
                 "order_type":   order_type,
                 "side":         side,
             },

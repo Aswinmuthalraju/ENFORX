@@ -85,34 +85,49 @@ class AlpacaClient:
         return self._place_tradeapi(self._api, ticker, qty, side, order_type, limit_price)
 
     def get_positions(self) -> list[dict]:
-        if self._api is None:
-            raise ConnectionError("Cannot get positions: Alpaca API not configured.")
+        if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+            raise ConnectionError("Alpaca API not configured.")
         try:
-            if isinstance(self._api, tuple):
-                positions = self._api[1].get_all_positions()
-                return [{"symbol": p.symbol, "qty": float(p.qty), "market_value": float(p.market_value)}
-                        for p in positions]
-            positions = self._api.list_positions()
-            return [{"symbol": p.symbol, "qty": float(p.qty), "market_value": float(p.market_value)}
-                    for p in positions]
+            import requests as _req
+            r = _req.get(
+                f"{ALPACA_BASE_URL.rstrip('/')}/v2/positions",
+                headers={"APCA-API-KEY-ID": ALPACA_API_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY},
+                timeout=10,
+            )
+            r.raise_for_status()
+            positions = r.json()
+            return [
+                {
+                    "symbol":       p.get("symbol", ""),
+                    "qty":          float(p.get("qty", 0)),
+                    "market_value": float(p.get("market_value", 0)),
+                }
+                for p in positions
+            ]
         except Exception as exc:
+            logger.error("get_positions failed: %s", exc)
             return [{"error": str(exc)}]
 
     def get_account(self) -> dict:
-        if self._api is None:
-            raise ConnectionError("Cannot get account: Alpaca API not configured.")
+        if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+            raise ConnectionError("Alpaca API not configured.")
         try:
-            if isinstance(self._api, tuple):
-                acc = self._api[1].get_account()
-            else:
-                acc = self._api.get_account()
+            import requests as _req
+            r = _req.get(
+                f"{ALPACA_BASE_URL.rstrip('/')}/v2/account",
+                headers={"APCA-API-KEY-ID": ALPACA_API_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY},
+                timeout=10,
+            )
+            r.raise_for_status()
+            acc = r.json()
             return {
-                "cash":            float(acc.cash),
-                "portfolio_value": float(acc.portfolio_value),
-                "buying_power":    float(acc.buying_power),
-                "status":          acc.status,
+                "cash":            float(acc.get("cash", 0)),
+                "portfolio_value": float(acc.get("portfolio_value", 0)),
+                "buying_power":    float(acc.get("buying_power", 0)),
+                "status":          acc.get("status", "unknown"),
             }
         except Exception as exc:
+            logger.error("get_account failed: %s", exc)
             return {"error": str(exc)}
 
     def cancel_all_orders(self) -> dict:

@@ -127,7 +127,8 @@ class FinancialDomainEnforcementEngine:
         symbol     = args.get("symbol", "").upper()
         qty        = int(args.get("qty", 0))
         side       = args.get("side", "").lower()
-        order_type = args.get("type", "market").lower()
+        # LLM sometimes uses 'order_type' instead of 'type' — check both
+        order_type = (args.get("type") or args.get("order_type") or "market").lower()
 
         # Hard Quantity Block: >= 10 is never allowed
         if qty >= 10:
