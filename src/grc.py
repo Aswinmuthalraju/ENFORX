@@ -12,6 +12,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.03.grc")
+
 
 class GuidedReasoningConstraints:
 

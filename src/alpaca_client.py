@@ -19,16 +19,14 @@ ALPACA_BASE_URL   = os.getenv("ALPACA_BASE_URL",   "https://paper-api.alpaca.mar
 ALPACA_API_KEY    = os.getenv("ALPACA_API_KEY",    "")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
 
-
 class AlpacaClient:
-
     def __init__(self):
         self._api = self._connect()
 
     def _connect(self):
-        """Try alpaca-trade-api first, then alpaca-py, then stub."""
+        """Try alpaca-trade-api first, then alpaca-py. Returns None if unconfigured."""
         if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
-            logger.warning("Alpaca credentials not set — using simulated client")
+            logger.warning("Alpaca credentials not set")
             return None
 
         # Try alpaca-trade-api (older, more common)
@@ -51,8 +49,6 @@ class AlpacaClient:
         # Try alpaca-py (newer SDK)
         try:
             from alpaca.trading.client import TradingClient
-            from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
-            from alpaca.trading.enums import OrderSide, TimeInForce
             client = TradingClient(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=True)
             client.get_account()
             logger.info("Connected via alpaca-py")
@@ -74,12 +70,12 @@ class AlpacaClient:
         order_type: str = "market",
         limit_price: float | None = None,
     ) -> dict:
-        """Place an order via Alpaca Paper Trading API.
-
-        Returns result dict with status, order_id, filled_qty.
-        """
+        """Place an order via Alpaca Paper Trading API."""
         if self._api is None:
-            return self._simulated_order(ticker, qty, side, order_type)
+            raise ConnectionError(
+                "Cannot place order: Alpaca API not configured. "
+                "Set ALPACA_API_KEY and ALPACA_SECRET_KEY in .env"
+            )
 
         # alpaca-py tuple format
         if isinstance(self._api, tuple) and self._api[0] == "alpaca-py":
@@ -90,7 +86,7 @@ class AlpacaClient:
 
     def get_positions(self) -> list[dict]:
         if self._api is None:
-            return [{"symbol": "SIMULATED", "qty": 0, "note": "Paper mode"}]
+            raise ConnectionError("Cannot get positions: Alpaca API not configured.")
         try:
             if isinstance(self._api, tuple):
                 positions = self._api[1].get_all_positions()
@@ -104,7 +100,7 @@ class AlpacaClient:
 
     def get_account(self) -> dict:
         if self._api is None:
-            return {"cash": 100000.0, "portfolio_value": 100000.0, "status": "SIMULATED"}
+            raise ConnectionError("Cannot get account: Alpaca API not configured.")
         try:
             if isinstance(self._api, tuple):
                 acc = self._api[1].get_account()
@@ -121,7 +117,7 @@ class AlpacaClient:
 
     def cancel_all_orders(self) -> dict:
         if self._api is None:
-            return {"status": "SIMULATED", "cancelled": 0}
+            raise ConnectionError("Cannot cancel orders: Alpaca API not configured.")
         try:
             if isinstance(self._api, tuple):
                 self._api[1].cancel_orders()
@@ -182,33 +178,3 @@ class AlpacaClient:
         except Exception as exc:
             logger.error("alpaca-py order failed: %s", exc)
             return {"status": "ERROR", "error": str(exc)}
-
-    def _simulated_order(self, ticker, qty, side, order_type) -> dict:
-        return {
-            "status":    "SIMULATED",
-            "order_id":  f"sim-{ticker}-{qty}-{side}",
-            "symbol":    ticker.upper(),
-            "qty":       qty,
-            "side":      side,
-            "type":      order_type,
-            "filled_qty": qty,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "note":      "Simulated — Alpaca API not connected",
-        }
-
-
-# ── Standalone test ──────────────────────────────────────────────────────────
-def test_alpaca_client():
-    client = AlpacaClient()
-    print("\n=== Alpaca Client Tests ===")
-    acc = client.get_account()
-    print(f"  Account: cash={acc.get('cash', acc.get('error', '?'))}")
-    pos = client.get_positions()
-    print(f"  Positions: {len(pos)} entries")
-    order = client.place_order("AAPL", 1, "buy", "market")
-    print(f"  Order: status={order['status']} id={order.get('order_id', '?')}")
-    print()
-
-
-if __name__ == "__main__":
-    test_alpaca_client()

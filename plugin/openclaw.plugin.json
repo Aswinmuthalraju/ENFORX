@@ -1,0 +1,27 @@
+{
+  "id": "enforx",
+  "name": "ENFORX",
+  "description": "10-layer Causal Integrity Enforcement for secure AI trading. Runs any trade command through dual firewalls, intent formalization, multi-agent deliberation, deterministic policy enforcement, and Alpaca paper trading execution.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "pythonPath": {
+        "type": "string",
+        "description": "Path to the Python interpreter inside the ENFORX venv",
+        "default": ""
+      },
+      "enforxDir": {
+        "type": "string",
+        "description": "Absolute path to the ENFORX project root",
+        "default": ""
+      },
+      "timeoutMs": {
+        "type": "number",
+        "description": "Max milliseconds to wait for a pipeline run",
+        "default": 120000
+      }
+    }
+  }
+}

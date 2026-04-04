@@ -23,11 +23,15 @@ import os
 from pathlib import Path
 from datetime import datetime, timezone
 
-# Ensure src/ is on the path when called from project root
+# Ensure src/ and root are on the path when called from project root
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
+
+from logger_config import setup_logging, log_layer_result
+setup_logging()
 
 from enforxguard_input   import InputFirewall
 from ife                 import IntentFormalizationEngine
@@ -75,10 +79,7 @@ def _print_banner(user_input: str) -> None:
     print(f"{'─'*68}")
 
 def _print_layer(num: int, name: str, status: str, detail: str = "") -> None:
-    icon = _icon(status)
-    print(f"  Layer {num:2d} │ {icon} │ {name}")
-    if detail:
-        print(f"         └─ {DIM}{detail[:80]}{RST}")
+    log_layer_result(num, name, status, detail)
 
 
 def _print_leader_info(leader_decision: dict, monitors: list[dict]) -> None:
@@ -108,12 +109,18 @@ def run_pipeline(
     user_input:  str,
     token:       dict  | None = None,
     agent_id:    str          = "trader-01",
-    demo_mode:   bool         = False,
     print_deliberation: bool  = True,
 ) -> dict:
     _print_banner(user_input)
     layer_results: dict = {}
     audit = AdaptiveAuditLoop()
+
+    try:
+        from llm_client import OpenClawClient
+        if not OpenClawClient().is_available():
+            print(f"  {Y}⚠ WARNING: OpenClaw Gateway unreachable! Pipeline will fail on LLM calls.{RST}")
+    except Exception:
+        pass
 
     # ── LAYER 1: Input Firewall ──────────────────────────────────────────────
     l1 = InputFirewall().scan(user_input)
@@ -205,7 +212,7 @@ def run_pipeline(
                          l6.get("flags"))
 
     # ── LAYER 7: Financial Domain Enforcement ───────────────────────────────
-    l7 = FinancialDomainEnforcementEngine(demo_mode=demo_mode).enforce(plan_data)
+    l7 = FinancialDomainEnforcementEngine().enforce(plan_data)
     layer_results["l7_fdee"] = l7
     _print_layer(7, "Financial Domain Enforcement (FDEE)", l7["result"],
                  l7.get("reason", "")[:80])
@@ -280,17 +287,21 @@ def run_pipeline(
     execution_result = {"status": "NO_TRADE", "note": "Research-only plan"}
     if trade_step:
         args   = trade_step["args"]
-        client = AlpacaClient()
-        execution_result = client.place_order(
-            args["symbol"], int(args["qty"]), args.get("side", "buy"),
-            args.get("type", "market")
-        )
-        print(f"\n  {G}{'─'*50}{RST}")
-        print(f"  {W}TRADE EXECUTED{RST}: {args.get('side','buy').upper()} "
-              f"{args['qty']} {args['symbol']} @ {args.get('type','market')}")
-        print(f"  Status: {_icon(execution_result.get('status','?'))}"
-              f" | Order ID: {execution_result.get('order_id','N/A')}")
-        print(f"  {G}{'─'*50}{RST}")
+        try:
+            client = AlpacaClient()
+            execution_result = client.place_order(
+                args["symbol"], int(args["qty"]), args.get("side", "buy"),
+                args.get("type", "market")
+            )
+            print(f"\n  {G}{'─'*50}{RST}")
+            print(f"  {W}TRADE EXECUTED{RST}: {args.get('side','buy').upper()} "
+                  f"{args['qty']} {args['symbol']} @ {args.get('type','market')}")
+            print(f"  Status: {_icon(execution_result.get('status','?'))}"
+                  f" | Order ID: {execution_result.get('order_id','N/A')}")
+            print(f"  {G}{'─'*50}{RST}")
+        except ConnectionError as exc:
+            execution_result = {"status": "ERROR", "error": str(exc)}
+            print(f"  {R}TRADE FAILED: {exc}{RST}")
 
     # ── LAYER 10: Audit ──────────────────────────────────────────────────────
     audit_entry = audit.log_run(
@@ -391,4 +402,4 @@ def _finalize(
 
 if __name__ == "__main__":
     inp = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Buy 5 shares of AAPL"
-    run_pipeline(inp, demo_mode=True)
+    run_pipeline(inp)

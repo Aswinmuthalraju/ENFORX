@@ -19,6 +19,9 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from logger_config import get_layer_logger
+logger = get_layer_logger("layer.08.dap")
+
 
 class DelegationAuthorityProtocol:
 
