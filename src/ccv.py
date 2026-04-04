@@ -112,9 +112,12 @@ class CausalChainValidator:
 
         # CHECK 2: Sector concentration
         sector        = TICKER_SECTOR.get(symbol, "unknown")
-        total_exp     = self._daily_exposure + trade_usd or 1.0
         sector_exp    = self._sector_exposure.get(sector, 0.0) + trade_usd
-        sector_pct    = sector_exp / (self._daily_exposure + trade_usd + 1.0)
+        total_exp = self._daily_exposure + trade_usd
+        if total_exp == 0:
+            sector_pct = 0.0
+        else:
+            sector_pct = sector_exp / total_exp
         if sector_pct > eff_sector_concentration:
             flags.append(
                 f"SECTOR_CONCENTRATION: {sector} sector at "
@@ -167,6 +170,9 @@ class CausalChainValidator:
         # Determine result
         if flags:
             return self._flag(flags, warnings, stress)
+
+        self.record_trade(symbol, qty)
+
         return self._pass(warnings, [], stress)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
