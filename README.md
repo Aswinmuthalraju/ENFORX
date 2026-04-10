@@ -158,35 +158,55 @@ Response returned through ArmorClaw (proof attached)  →  back to agent
 ## Project Structure
 
 ```
-ENFORX/
-├── src/
-│   ├── main.py                   # Pipeline orchestrator — run_pipeline()
-│   ├── cli.py                    # CLI entry point (--health, --interactive, command)
-│   ├── llm_client.py             # Singleton OpenClaw LLM gateway (all agents share this)
-│   ├── enforxguard_input.py      # Layer 1: Input Firewall
-│   ├── ife.py                    # Layer 2: Intent Formalization Engine
-│   ├── grc.py                    # Layer 3: Guided Reasoning Constraints
-│   ├── agent_core.py             # Layer 4: Deliberation orchestrator caller
-│   ├── piav.py                   # Layer 5: Plan-Intent Alignment Validator
-│   ├── ccv.py                    # Layer 6: Causal Chain Validator
-│   ├── fdee.py                   # Layer 7: Financial Domain Enforcement Engine
-│   ├── dap.py                    # Layer 8: Delegation Authority Protocol
-│   ├── enforxguard_output.py     # Layer 9: Output Firewall
-│   ├── audit.py                  # Layer 10: Adaptive Audit Loop
-│   ├── alpaca_client.py          # Alpaca Paper Trading client (dual SDK support)
-│   └── agents/
-│       ├── leader_agent.py       # LeaderAgent — deterministic supervisor
-│       ├── deliberation.py       # Async 2-round deliberation orchestrator
-│       ├── analyst_agent.py      # AnalystAgent — bullish researcher
-│       ├── risk_agent.py         # RiskAgent — devil's advocate; veto power
-│       ├── compliance_agent.py   # ComplianceAgent — policy enforcer
-│       └── execution_agent.py    # ExecutionAgent — final plan generator
-├── logs/                         # Auto-created | Daily rotating enforx_YYYYMMDD.log/json
-├── logger_config.py              # Separate logging brain (Terminal + JSON + File)
-├── enforx-policy.json            # Trading policy configuration
-├── requirements.txt
-├── Makefile
-└── .env.example                  # Environment example — copy to .env
+ENFORX/                           # Monorepo root
+│
+├── core/                         # Python pipeline
+│   ├── src/
+│   │   ├── main.py               # Pipeline orchestrator — run_pipeline()
+│   │   ├── cli.py                # CLI entry point (--health, --interactive, command)
+│   │   ├── llm_client.py         # Singleton OpenClaw LLM gateway (all agents share this)
+│   │   ├── logger_config.py      # Logging brain (Terminal + JSON + File)
+│   │   ├── enforxguard_input.py  # Layer 1: Input Firewall
+│   │   ├── ife.py                # Layer 2: Intent Formalization Engine
+│   │   ├── grc.py                # Layer 3: Guided Reasoning Constraints
+│   │   ├── agent_core.py         # Layer 4: Deliberation orchestrator caller
+│   │   ├── piav.py               # Layer 5: Plan-Intent Alignment Validator
+│   │   ├── ccv.py                # Layer 6: Causal Chain Validator
+│   │   ├── fdee.py               # Layer 7: Financial Domain Enforcement Engine
+│   │   ├── dap.py                # Layer 8: Delegation Authority Protocol
+│   │   ├── enforxguard_output.py # Layer 9: Output Firewall
+│   │   ├── audit.py              # Layer 10: Adaptive Audit Loop
+│   │   ├── alpaca_client.py      # Alpaca Paper Trading client (dual SDK support)
+│   │   └── agents/
+│   │       ├── leader_agent.py   # LeaderAgent — deterministic supervisor
+│   │       ├── deliberation.py   # Async 2-round deliberation orchestrator
+│   │       ├── analyst_agent.py  # AnalystAgent — bullish researcher
+│   │       ├── risk_agent.py     # RiskAgent — devil's advocate; veto power
+│   │       ├── compliance_agent.py # ComplianceAgent — policy enforcer
+│   │       └── execution_agent.py  # ExecutionAgent — final plan generator
+│   ├── tests/                    # Pytest test suite
+│   ├── enforx-policy.json        # Trading policy configuration
+│   └── requirements.txt
+│
+├── plugin/                       # OpenClaw / ArmorClaw plugin
+│   ├── index.js                  # Tool registration (enforx_trade, enforx_health)
+│   ├── openclaw.plugin.json
+│   └── package.json
+│
+├── bot/                          # Telegram bot
+│   └── telegram_bot.py           # Receives trade commands, runs pipeline, replies
+│
+├── ENFORX-WEB/                   # Frontend web app (React + Vite)
+│   ├── src/
+│   ├── public/
+│   └── package.json
+│
+├── armoriq-openclaw-plugin/      # ArmorIQ ArmorClaw plugin source
+│
+├── logs/                         # Runtime only — gitignored | Daily rotating JSON logs
+├── Makefile                      # make install / test / bot / website / clean
+├── .env.example                  # Environment template — copy to .env
+└── .gitignore
 ```
 
 ---
@@ -218,7 +238,7 @@ source venv/bin/activate          # macOS / Linux
 # venv\Scripts\activate           # Windows
 
 # 3. Install Python dependencies
-pip install -r requirements.txt
+pip install -r core/requirements.txt
 
 # 4. Copy environment template
 cp .env.template .env
@@ -328,7 +348,9 @@ Verify all three external systems are reachable before running the pipeline:
 
 ```bash
 source venv/bin/activate
-python -m src.cli --health
+cd core && python -m src.cli --health
+# or from repo root:
+PYTHONPATH=./core python -m src.cli --health
 ```
 
 Expected output when everything is correctly configured:
@@ -354,6 +376,9 @@ Run a single trade command through the full 10-layer pipeline:
 ```bash
 source venv/bin/activate
 
+# Run from core/ directory
+cd core
+
 # Single command
 python -m src.cli "Buy 5 shares of AAPL"
 
@@ -364,6 +389,9 @@ python -m src.cli --health
 python -m src.cli --interactive
 # or just:
 python -m src.cli
+
+# Or from repo root using make:
+make demo
 ```
 
 ### Interactive Mode
@@ -471,6 +499,8 @@ grep "BLOCK\|VIOLATION\|ERROR" logs/enforx_*.log
 cat logs/enforx_*.json | jq 'select(.layer == "layer.08.dap")'
 ```
 
+> Logs are written to `logs/` at the repo root and are gitignored.
+
 ### 3. Adaptive Audit Loop
 The audit log is append-only with SHA-256 hash chaining — each entry hashes the previous entry's hash, making retroactive tampering detectable. Every `BLOCK` generates a counterfactual explanation.
 
@@ -560,7 +590,7 @@ The audit log is append-only with SHA-256 hash chaining — each entry hashes th
 
 ## Policy Configuration
 
-Edit `enforx-policy.json` to adjust all trading constraints. The file is loaded at startup — no code changes required.
+Edit `core/enforx-policy.json` to adjust all trading constraints. The file is loaded at startup — no code changes required.
 
 ```json
 {

@@ -38,8 +38,10 @@ Thumbs.db
 .claude/
 
 # Runtime output / audit logs
+logs/
 audit/logs/
 enforx_audit.log
+core/enforx_audit.log
 output.txt
 output2.txt
 output3.txt

@@ -19,9 +19,9 @@ import re
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "core" / "src"))
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
@@ -149,7 +149,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         status_msg += "• Alpaca Paper: `OFFLINE`\n"
 
     # Policy
-    policy_path = Path(__file__).parent / "enforx-policy.json"
+    policy_path = Path(__file__).parent.parent / "core" / "enforx-policy.json"
     status_msg += f"• Policy File: `{'FOUND' if policy_path.exists() else 'MISSING'}`\n"
     
     await update.message.reply_text(status_msg, parse_mode="Markdown")

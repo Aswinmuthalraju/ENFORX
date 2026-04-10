@@ -25,6 +25,7 @@ const execFileAsync = promisify(execFile);
 // ENFORX project root — one level up from plugin/
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..");
+const CORE_DIR = resolve(__dirname, "..", "core");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ function resolvePython(config) {
 }
 
 function resolveEnforxDir(config) {
-  return config?.enforxDir || PROJECT_ROOT;
+  return config?.enforxDir || CORE_DIR;
 }
 
 async function runPipeline(command, config) {

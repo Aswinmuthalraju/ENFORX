@@ -1,21 +1,27 @@
-.PHONY: demo install test clean
+.PHONY: install test clean demo bot website
 
 install:
-	pip install -r requirements.txt
-	@echo "Copy .env.template to .env and fill in your keys"
+	pip install -r core/requirements.txt
+	@echo "Copy .env.example to .env and fill in your keys"
 
 demo:
-	python demo.py
+	PYTHONPATH=./core python -m src.cli --interactive
 
 demo-single:
-	python demo.py --scenario $(S)
+	PYTHONPATH=./core python -m src.cli $(S)
 
 openclaw:
-	python openclaw_tool.py "Buy 5 shares of AAPL"
+	cd plugin && openclaw gateway start
 
 test:
-	python -m pytest tests/ -v
+	PYTHONPATH=./core python -m pytest core/tests/ -v
+
+bot:
+	python bot/telegram_bot.py
+
+website:
+	cd ENFORX-WEB && npm run dev
 
 clean:
 	find . -name '__pycache__' -type d -exec rm -rf {} +
-	rm -f enforx_audit.log
+	rm -f enforx_audit.log core/enforx_audit.log
