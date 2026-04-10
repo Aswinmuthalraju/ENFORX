@@ -7,8 +7,8 @@ import sys
 import logging
 from pathlib import Path
 
-# Ensure src/ is importable
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Ensure core/src/ is importable
+sys.path.insert(0, str(Path(__file__).parent / "core" / "src"))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,7 +63,6 @@ def pipeline(req: PipelineRequest):
 def portfolio():
     try:
         # Import AlpacaClient directly — no need to load the full pipeline
-        sys.path.insert(0, str(Path(__file__).parent / "src"))
         from alpaca_client import AlpacaClient as _AlpacaClient
         client = _AlpacaClient()
         account = client.get_account()
