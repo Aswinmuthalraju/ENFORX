@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ENFORX Console | Precision Security</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#1F3A5F",
+                        accent: "#2A9D8F",
+                        background: "#F8FAFC",
+                        card: "#FFFFFF",
+                        border: "#E5E7EB",
+                        "text-primary": "#111827",
+                        "text-secondary": "#6B7280",
+                        status: {
+                            pass: "#16A34A",
+                            flag: "#F59E0B",
+                            block: "#DC2626",
+                            correct: "#7C3AED"
+                        }
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "0.75rem", // Standardized to premium rounded-xl
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    },
+                    spacing: {
+                        "2": "0.5rem",   // 8px grid
+                        "4": "1rem",     // 16px
+                        "6": "1.5rem",   // 24px
+                        "8": "2rem",     // 32px
+                        "12": "3rem"     // 48px
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; color: #111827; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #F1F5F9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 10px;
+        }
+        @keyframes fadeInLayer {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pipeline-layer {
+            animation: fadeInLayer 0.4s ease-out forwards;
+            opacity: 0;
+        }
+        .layer-1 { animation-delay: 0.1s; }
+        .layer-2 { animation-delay: 0.2s; }
+        .layer-3 { animation-delay: 0.3s; }
+        .layer-4 { animation-delay: 0.4s; }
+        .layer-5 { animation-delay: 0.5s; }
+        .layer-6 { animation-delay: 0.6s; }
+        .layer-7 { animation-delay: 0.7s; }
+        .layer-8 { animation-delay: 0.8s; }
+        .layer-9 { animation-delay: 0.9s; }
+        .execution-step { animation-delay: 1.0s; }
+        .layer-10 { animation-delay: 1.1s; }
+    </style>
+</head>
+<body class="bg-background text-text-primary min-h-screen flex flex-col overflow-hidden">
+<!-- TopNavBar -->
+<nav class="w-full top-0 sticky bg-white font-sans antialiased text-sm tracking-tight flex justify-between items-center h-16 px-8 z-50 border-b border-border">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-primary">ENFORX</span>
+<div class="flex gap-8">
+<a class="text-text-secondary hover:text-primary transition-colors font-medium" href="#">Home</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1" href="#">Console</a>
+<a class="text-text-secondary hover:text-primary transition-colors font-medium" href="#">Plugins</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<span class="material-symbols-outlined text-text-secondary p-2 cursor-pointer hover:bg-slate-100 transition-colors rounded-xl">notifications</span>
+</div>
+<span class="material-symbols-outlined text-text-secondary p-2 cursor-pointer hover:bg-slate-100 transition-colors rounded-xl">settings</span>
+<div class="h-8 w-8 bg-slate-200 rounded-full overflow-hidden border border-border">
+<img alt="User profile" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrU2Qp6XQ2ThTYcAruezSMZ0vVhgUEOltEEFUbX2NJgo8gFHUqLq2C_0xc0PEFDTyZYyfloL2L2qIT3bJw1futZ8QOXVgnSAk_9qV-kL4VkQr8lK8rKOEseDrmBv22ZaRcsgx5P1YPEMdS4Ds_U4cjOlWOIwObDHb7CJN8iYLNCxRcCEqR4fMVguSO0cv-5lYXPsHMipkQkUEMzlPfqlfaSUYxJpOLuGNTcofez-8wLC21k7DHNu6q7-E089eQuj_WQOGPyXTtgeM"/>
+</div>
+</div>
+</nav>
+<!-- Main Workspace -->
+<main class="flex flex-1 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="hidden md:flex h-full w-64 flex-col py-8 bg-white border-r border-border shrink-0">
+<div class="px-6 mb-10">
+<div class="flex items-center gap-3">
+<div class="h-10 w-10 bg-primary rounded-xl flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-xl" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div>
+<h2 class="text-xs font-bold tracking-tight text-text-primary uppercase">Console</h2>
+<p class="text-[10px] text-text-secondary uppercase tracking-widest">Precision Security</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-2 px-2">
+<a class="flex items-center gap-3 text-text-secondary px-4 py-3 hover:bg-slate-50 rounded-xl font-sans text-xs uppercase tracking-widest font-semibold transition-all" href="#">
+<span class="material-symbols-outlined text-lg">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 bg-slate-50 text-primary px-4 py-3 border-l-4 border-primary rounded-r-xl font-sans text-xs uppercase tracking-widest font-bold" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">security</span>
+<span>Security Logs</span>
+</a>
+<a class="flex items-center gap-3 text-text-secondary px-4 py-3 hover:bg-slate-50 rounded-xl font-sans text-xs uppercase tracking-widest font-semibold" href="#">
+<span class="material-symbols-outlined text-lg">hub</span>
+<span>Network Traffic</span>
+</a>
+<a class="flex items-center gap-3 text-text-secondary px-4 py-3 hover:bg-slate-50 rounded-xl font-sans text-xs uppercase tracking-widest font-semibold" href="#">
+<span class="material-symbols-outlined text-lg">vpn_key</span>
+<span>API Keys</span>
+</a>
+<a class="flex items-center gap-3 text-text-secondary px-4 py-3 hover:bg-slate-50 rounded-xl font-sans text-xs uppercase tracking-widest font-semibold" href="#">
+<span class="material-symbols-outlined text-lg">history</span>
+<span>Audit Trail</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full bg-primary text-white py-3 px-4 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-xl hover:opacity-90 transition-all shadow-md active:scale-[0.98]">
+<span class="material-symbols-outlined text-sm">add</span>
+                    Deploy Layer
+                </button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col h-full bg-background">
+<div class="flex flex-1 overflow-hidden">
+<!-- Left: Chat Panel (1/3) -->
+<section class="w-1/3 flex flex-col border-r border-border bg-white">
+<header class="h-14 border-b border-border px-6 flex items-center justify-between shrink-0">
+<h3 class="text-xs font-bold uppercase tracking-widest text-text-secondary">Active Session</h3>
+<span class="flex items-center gap-2 text-[10px] font-bold text-status-pass bg-green-50 px-3 py-1 rounded-full border border-green-100">
+<span class="w-1.5 h-1.5 rounded-full bg-status-pass animate-pulse"></span> LIVE
+                        </span>
+</header>
+<div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+<!-- User Input -->
+<div class="flex flex-col gap-2">
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-bold text-text-secondary uppercase tracking-widest">User</span>
+<span class="text-[9px] text-slate-400">14:02:11</span>
+</div>
+<div class="bg-slate-50 p-4 rounded-xl text-sm border border-border max-w-[90%] text-text-primary">
+                                buy 20 shares of TSLA at market price
+                            </div>
+</div>
+<!-- System Response -->
+<div class="flex flex-col gap-2">
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-bold text-primary uppercase tracking-widest">Enforx Kernel</span>
+<span class="text-[9px] text-slate-400">14:02:12</span>
+</div>
+<div class="bg-primary p-5 rounded-xl text-sm text-white max-w-[95%] space-y-4 shadow-sm">
+<div class="flex items-center gap-2">
+<span class="text-[9px] px-2 py-0.5 bg-status-correct text-white font-bold rounded-lg border border-white/20 uppercase tracking-tighter">CORRECTED</span>
+<span class="text-[9px] px-2 py-0.5 bg-status-pass text-white font-bold rounded-lg border border-white/20 uppercase tracking-tighter">PASS</span>
+</div>
+<p class="text-slate-100 text-xs leading-relaxed">Order processed with volume optimization based on portfolio constraints.</p>
+<div class="bg-black/20 p-3 rounded-lg text-[10px] font-mono text-slate-300 border border-white/5">
+                                    EXEC: buy 10 shares TSLA @ MKT
+                                </div>
+</div>
+</div>
+</div>
+<div class="p-6 border-t border-border bg-slate-50">
+<div class="relative">
+<input class="w-full bg-white border border-border px-5 py-3 rounded-xl text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary placeholder:text-slate-400 transition-all outline-none" placeholder="Type command..." type="text"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:scale-110 transition-transform p-2">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Right: Architecture Flow (2/3) -->
+<section class="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+<header class="h-14 border-b border-border px-8 flex items-center justify-between shrink-0 bg-white">
+<h3 class="text-xs font-bold uppercase tracking-widest text-text-secondary">Architecture Flow / Real-time Pipeline</h3>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end">
+<span class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">Latency</span>
+<span class="text-[10px] text-text-primary font-bold">284ms</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">Throughput</span>
+<span class="text-[10px] text-text-primary font-bold">1.2k/s</span>
+</div>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto p-12 custom-scrollbar relative">
+<div class="max-w-2xl mx-auto space-y-6 relative">
+<!-- Vertical Connector Line -->
+<div class="absolute left-7 top-8 bottom-8 w-[2px] bg-border z-0"></div>
+<!-- Layer Loop -->
+<!-- L1 -->
+<div class="pipeline-layer layer-1 relative z-10 flex items-center gap-8 group">
+<div class="h-14 w-14 rounded-xl bg-status-pass flex items-center justify-center shrink-0 border border-green-600/20 shadow-sm transition-transform group-hover:scale-105">
+<span class="material-symbols-outlined text-white text-2xl">security</span>
+</div>
+<div class="flex-1 bg-white border border-border p-5 rounded-xl flex items-center justify-between hover:shadow-md hover:border-accent transition-all cursor-default">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-[9px] font-bold text-text-secondary uppercase">L1</span>
+<h4 class="text-[11px] font-bold uppercase tracking-widest text-text-primary">EnforxGuard Input Firewall</h4>
+</div>
+<p class="text-[10px] text-text-secondary">Scanning for prompt injections and malicious patterns.</p>
+</div>
+<span class="h-2.5 w-2.5 rounded-full bg-status-pass shadow-[0_0_10px_rgba(22,163,74,0.4)]"></span>
+</div>
+</div>
+<!-- L3 (Guided Reasoning) -->
+<div class="pipeline-layer layer-3 relative z-10 flex items-center gap-8 group">
+<div class="h-14 w-14 rounded-xl bg-status-pass flex items-center justify-center shrink-0 border border-green-600/20 shadow-sm transition-transform group-hover:scale-105">
+<span class="material-symbols-outlined text-white text-2xl">rule</span>
+</div>
+<div class="flex-1 bg-white border border-border p-5 rounded-xl flex items-center justify-between hover:shadow-md hover:border-accent transition-all">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-[9px] font-bold text-text-secondary uppercase">L3</span>
+<h4 class="text-[11px] font-bold uppercase tracking-widest text-text-primary">Guided Reasoning Constraints</h4>
+</div>
+<p class="text-[10px] text-text-secondary">Applying logical bounds to autonomous thought chains.</p>
+</div>
+<span class="h-2.5 w-2.5 rounded-full bg-status-pass shadow-[0_0_10px_rgba(22,163,74,0.4)]"></span>
+</div>
+</div>
+<!-- L7 (FDEE Correction) -->
+<div class="pipeline-layer layer-7 relative z-10 flex items-center gap-8 group">
+<div class="h-14 w-14 rounded-xl bg-status-flag flex items-center justify-center shrink-0 border border-amber-600/20 shadow-sm transition-transform group-hover:scale-105">
+<span class="material-symbols-outlined text-white text-2xl" style="font-variation-settings: 'FILL' 1;">auto_fix_high</span>
+</div>
+<div class="flex-1 bg-white border-2 border-status-flag p-5 rounded-xl flex items-center justify-between shadow-sm">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-[9px] font-bold text-text-secondary uppercase">L7</span>
+<h4 class="text-[11px] font-bold uppercase tracking-widest text-text-primary">FDEE (Safety Controller)</h4>
+</div>
+<p class="text-[10px] text-status-flag font-bold">ACTION_CORRECTED: Volume clamped to 10 shares (Portfolio Limit).</p>
+</div>
+<span class="h-2.5 w-2.5 rounded-full bg-status-flag shadow-[0_0_10px_rgba(245,158,11,0.4)]"></span>
+</div>
+</div>
+<!-- Bridge -->
+<div class="execution-step pipeline-layer relative z-10 flex flex-col items-center py-6">
+<div class="px-5 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-[0.25em] rounded-full flex items-center gap-3 shadow-lg border border-white/10">
+<span class="material-symbols-outlined text-xs">rocket_launch</span>
+                                    Alpaca Execution Bridge
+                                </div>
+<div class="h-12 w-[2px] bg-border"></div>
+</div>
+<!-- L10 -->
+<div class="pipeline-layer layer-10 relative z-10 flex items-center gap-8 group">
+<div class="h-14 w-14 rounded-xl bg-primary flex items-center justify-center shrink-0 border border-black/10 shadow-xl transition-transform group-hover:scale-105">
+<span class="material-symbols-outlined text-white text-2xl">history_edu</span>
+</div>
+<div class="flex-1 bg-white border border-primary p-5 rounded-xl flex items-center justify-between shadow-md">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="text-[9px] font-bold text-text-secondary uppercase">L10</span>
+<h4 class="text-[11px] font-bold uppercase tracking-widest text-primary">Adaptive Audit Loop</h4>
+</div>
+<p class="text-[10px] text-text-secondary italic">Capturing state telemetry for retrospective verification.</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-[9px] font-bold text-primary uppercase tracking-widest mr-2">COMMITTED</span>
+<span class="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(31,58,95,0.4)]"></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Bottom: Audit Log -->
+<footer class="h-72 border-t border-border bg-white shrink-0 flex flex-col">
+<div class="px-8 py-4 border-b border-border flex justify-between items-center bg-slate-50/50">
+<div class="flex items-center gap-4">
+<div class="p-2 bg-white border border-border rounded-lg">
+<span class="material-symbols-outlined text-xl text-primary">list_alt</span>
+</div>
+<div>
+<h3 class="text-xs font-bold uppercase tracking-widest text-text-primary">Audit Log Feed</h3>
+<p class="text-[9px] text-text-secondary uppercase tracking-tighter">System-wide event stream</p>
+</div>
+</div>
+<div class="flex gap-6 items-center">
+<div class="flex flex-col items-end">
+<span class="text-[9px] text-text-secondary font-bold uppercase tracking-tighter">Total Events</span>
+<span class="text-[10px] text-text-primary font-bold">1,204</span>
+</div>
+<div class="h-8 w-[1px] bg-border"></div>
+<span class="text-[10px] uppercase font-bold text-status-pass flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full border border-green-100">
+<span class="w-1.5 h-1.5 rounded-full bg-status-pass animate-pulse"></span> SYSTEM HEALTHY
+                        </span>
+</div>
+</div>
+<div class="flex-1 overflow-auto custom-scrollbar">
+<table class="w-full text-left text-xs border-collapse">
+<thead class="sticky top-0 bg-white z-10">
+<tr class="bg-slate-50">
+<th class="px-8 py-3 font-bold uppercase text-[9px] text-text-secondary tracking-widest border-b border-border">Timestamp</th>
+<th class="px-4 py-3 font-bold uppercase text-[9px] text-text-secondary tracking-widest border-b border-border">Decision</th>
+<th class="px-4 py-3 font-bold uppercase text-[9px] text-text-secondary tracking-widest border-b border-border">Layer</th>
+<th class="px-4 py-3 font-bold uppercase text-[9px] text-text-secondary tracking-widest border-b border-border">Reason</th>
+<th class="px-8 py-3 font-bold uppercase text-[9px] text-text-secondary tracking-widest border-b border-border">Counterfactual</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border">
+<tr class="hover:bg-slate-50 transition-colors cursor-default">
+<td class="px-8 py-4 font-mono text-[10px] text-text-secondary">2024-05-24 14:02:12.441</td>
+<td class="px-4 py-4"><span class="px-3 py-1 bg-amber-50 text-status-flag font-bold rounded-lg text-[9px] border border-amber-100 uppercase">CORRECTED</span></td>
+<td class="px-4 py-4 font-bold text-text-primary">L7: FDEE</td>
+<td class="px-4 py-4 text-text-secondary">Volume optimization for ticker TSLA.</td>
+<td class="px-8 py-4 text-slate-400 italic text-[11px]">If not corrected, risk score would be 0.82 (CRITICAL).</td>
+</tr>
+<tr class="hover:bg-slate-50 transition-colors cursor-default">
+<td class="px-8 py-4 font-mono text-[10px] text-text-secondary">2024-05-24 14:00:11.092</td>
+<td class="px-4 py-4"><span class="px-3 py-1 bg-green-50 text-status-pass font-bold rounded-lg text-[9px] border border-green-100 uppercase">PASS</span></td>
+<td class="px-4 py-4 font-bold text-text-primary">L1-L9</td>
+<td class="px-4 py-4 text-text-secondary">Standard liquidity query from authenticated IP.</td>
+<td class="px-8 py-4 text-slate-400 italic text-[11px]">Standard procedure.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Mini Footer -->
+<div class="px-8 py-3 bg-white flex justify-between items-center shrink-0 border-t border-border">
+<span class="text-[9px] font-semibold tracking-widest uppercase text-text-secondary">© 2024 ENFORX SECURE. LAYERED DEFENSE ACTIVATED.</span>
+<div class="flex gap-6">
+<a class="text-[9px] font-bold tracking-widest uppercase text-text-secondary hover:text-primary transition-colors" href="#">Security Policy</a>
+<a class="text-[9px] font-bold tracking-widest uppercase text-text-secondary hover:text-primary transition-colors" href="#">Status</a>
+</div>
+</div>
+</footer>
+</div>
+</main>
+</body></html>

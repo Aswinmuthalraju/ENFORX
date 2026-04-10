@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ENFORX Console | Precision Security</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#1F3A5F",
+              "accent": "#2A9D8F",
+              "background": "#F8FAFC",
+              "surface": "#FFFFFF",
+              "status-pass": "#16A34A",
+              "status-flag": "#F59E0B",
+              "status-block": "#DC2626",
+              "status-correct": "#7C3AED",
+              "border-soft": "#E2E8F0"
+            },
+            borderRadius: {
+              "DEFAULT": "0.125rem",
+              "lg": "0.25rem",
+              "xl": "0.75rem",
+              "2xl": "1rem",
+              "full": "9999px"
+            },
+            fontFamily: {
+              "sans": ["Inter", "sans-serif"],
+              "mono": ["JetBrains Mono", "monospace"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .pipeline-connector::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -16px;
+            width: 2px;
+            height: 16px;
+            background: #CBD5E1;
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+        .pipeline-connector:last-child::after { display: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .active-glow {
+            box-shadow: 0 0 20px rgba(31, 58, 95, 0.15);
+            border-color: #1F3A5F !important;
+        }
+    </style>
+</head>
+<body class="text-slate-900 antialiased overflow-hidden h-screen flex flex-col">
+<!-- Top Header -->
+<header class="h-16 bg-white border-b border-border-soft px-8 flex items-center justify-between z-50">
+<div class="flex items-center gap-8">
+<div class="text-xl font-black tracking-tighter text-primary">ENFORX</div>
+<nav class="flex items-center space-x-6 text-sm font-medium">
+<a class="text-slate-400 hover:text-primary transition-colors" href="#">Home</a>
+<a class="text-primary border-b-2 border-primary pb-5 mt-5" href="#">Console</a>
+<a class="text-slate-400 hover:text-primary transition-colors" href="#">Plugins</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden bg-slate-200 border border-border-soft">
+<img alt="Profile" class="object-cover h-full w-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiNS8JHNsIxoyzR0dTuY6HVH8esmhSSLtLUMKkjCaNQwrO-Zf7A_phxNbK34yLcH7lyBlDSsYT1FC2aga5TEb5MJocWPd04hxnckkEjiXLvH2GlJcDhwZn7_A-YvW4NKVxQLQXHTs6bAf--OPeCb0ECmFovs6eQFOX8tHHGEbHO9BUXIfITvZTegbr99E46jZ5R-Ha6cVSBy_8qoP5_e-e03qc0f9ZbIBcxlPXigSefRhRGXZXOSq-d7REP0Hav1l4QgnYs4i1_J8"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Left Panel: Chat Interface -->
+<aside class="w-80 border-r border-border-soft bg-white flex flex-col">
+<div class="p-6 border-b border-border-soft">
+<h2 class="text-xs font-bold tracking-widest uppercase text-slate-400 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">forum</span> Chat Protocol
+                </h2>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+<div class="flex flex-col items-start max-w-[90%]">
+<div class="bg-slate-100 p-3 rounded-xl rounded-tl-none text-sm leading-relaxed text-slate-700">
+                        Architecture analysis requested for portfolio rebalancing. Initialize EnforxGuard?
+                    </div>
+</div>
+<div class="flex flex-col items-end max-w-[90%] ml-auto">
+<div class="bg-primary text-white p-3 rounded-xl rounded-tr-none text-sm shadow-sm leading-relaxed">
+                        Yes, proceed with 10-layer validation flow for 500 MSFT buy order.
+                    </div>
+</div>
+<div class="flex flex-col items-start max-w-[90%]">
+<div class="bg-slate-50 border border-slate-100 p-3 rounded-xl rounded-tl-none text-sm flex items-center gap-2 italic text-slate-400">
+<span class="material-symbols-outlined text-sm animate-spin">sync</span> Running Input Firewall...
+                    </div>
+</div>
+</div>
+<div class="p-4 bg-white border-t border-border-soft">
+<div class="relative">
+<input class="w-full bg-slate-50 border-border-soft border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-slate-400" placeholder="Send command..." type="text"/>
+<button class="absolute right-2 top-1.5 p-1.5 text-primary hover:bg-slate-100 rounded-lg transition-colors">
+<span class="material-symbols-outlined text-xl">send</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- Center Panel: Architecture Flow -->
+<main class="flex-1 bg-background overflow-hidden flex flex-col border-r border-border-soft">
+<div class="p-6 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 border-b border-border-soft z-10">
+<div>
+<h2 class="text-xs font-black tracking-widest uppercase text-primary">Architecture Flow</h2>
+<p class="text-[10px] text-slate-400 uppercase font-medium mt-1 tracking-wider">Live System Monitoring</p>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 bg-accent/10 border border-accent/20 rounded-full">
+<div class="h-2 w-2 rounded-full bg-accent animate-pulse"></div>
+<span class="text-[10px] font-bold text-accent uppercase tracking-tighter">System Active</span>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-8 no-scrollbar">
+<div class="max-w-xl mx-auto space-y-4 pb-8">
+<!-- Layer 01 -->
+<div class="relative pipeline-connector">
+<div class="bg-white border border-border-soft p-4 rounded-xl flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-4">
+<div class="bg-status-pass/10 p-2 rounded-lg"><span class="material-symbols-outlined text-status-pass" style="font-variation-settings: 'FILL' 1;">verified_user</span></div>
+<div>
+<p class="text-[9px] font-bold uppercase text-slate-400">Layer 01</p>
+<h3 class="text-sm font-semibold">EnforxGuard Input Firewall</h3>
+</div>
+</div>
+<span class="px-2 py-1 bg-status-pass/10 text-status-pass text-[10px] font-black rounded border border-status-pass/20">PASS</span>
+</div>
+</div>
+<!-- Layer 02 -->
+<div class="relative pipeline-connector">
+<div class="bg-white border border-border-soft p-4 rounded-xl flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-4">
+<div class="bg-status-pass/10 p-2 rounded-lg"><span class="material-symbols-outlined text-status-pass">psychology</span></div>
+<div>
+<p class="text-[9px] font-bold uppercase text-slate-400">Layer 02</p>
+<h3 class="text-sm font-semibold">Intent Formalization Engine</h3>
+</div>
+</div>
+<span class="px-2 py-1 bg-status-pass/10 text-status-pass text-[10px] font-black rounded border border-status-pass/20">PASS</span>
+</div>
+</div>
+<!-- Layer 03 -->
+<div class="relative pipeline-connector">
+<div class="bg-white border border-border-soft p-4 rounded-xl flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-4">
+<div class="bg-status-flag/10 p-2 rounded-lg"><span class="material-symbols-outlined text-status-flag">rule</span></div>
+<div>
+<p class="text-[9px] font-bold uppercase text-slate-400">Layer 03</p>
+<h3 class="text-sm font-semibold">Guided Reasoning Constraints</h3>
+</div>
+</div>
+<span class="px-2 py-1 bg-status-flag/10 text-status-flag text-[10px] font-black rounded border border-status-flag/20">FLAG</span>
+</div>
+</div>
+<!-- Layer 04 -->
+<div class="relative pipeline-connector">
+<div class="bg-white border-2 active-glow p-4 rounded-xl flex items-center justify-between shadow-md relative z-10">
+<div class="flex items-center gap-4">
+<div class="bg-primary p-2 rounded-lg text-white"><span class="material-symbols-outlined animate-pulse">token</span></div>
+<div>
+<p class="text-[9px] font-bold uppercase text-primary/60">Layer 04</p>
+<h3 class="text-sm font-bold text-primary">Agent Core</h3>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="flex h-2 w-2 rounded-full bg-primary animate-ping"></span>
+<span class="text-[10px] font-black text-primary uppercase">Active</span>
+</div>
+</div>
+</div>
+<!-- Layer 05 -->
+<div class="relative pipeline-connector">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">fact_check</span></div>
+<h3 class="text-sm font-medium text-slate-500">Plan-Intent Alignment Validator</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+</div>
+<!-- Layer 06 -->
+<div class="relative pipeline-connector">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">account_tree</span></div>
+<h3 class="text-sm font-medium text-slate-500">Causal Chain Validator</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+</div>
+<!-- Layer 07 -->
+<div class="relative pipeline-connector">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">security</span></div>
+<h3 class="text-sm font-medium text-slate-500">FDEE Safety Controller</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+</div>
+<!-- Layer 08 -->
+<div class="relative pipeline-connector">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">key</span></div>
+<h3 class="text-sm font-medium text-slate-500">Delegation Authority Protocol</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+</div>
+<!-- Layer 09 -->
+<div class="relative pipeline-connector">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex flex-col gap-3 opacity-60">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">output</span></div>
+<h3 class="text-sm font-medium text-slate-500">EnforxGuard Output Firewall</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+<div class="bg-slate-50 p-2 rounded border border-slate-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">terminal</span>
+<span class="text-[10px] font-mono text-slate-400">ALPC_EXEC_PENDING...</span>
+</div>
+</div>
+</div>
+<!-- Layer 10 -->
+<div class="relative">
+<div class="bg-white/50 border border-border-soft p-4 rounded-xl flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="bg-slate-100 p-2 rounded-lg text-slate-400"><span class="material-symbols-outlined">history</span></div>
+<h3 class="text-sm font-medium text-slate-500">Adaptive Audit Loop</h3>
+</div>
+<span class="material-symbols-outlined text-slate-300">lock</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Right Panel: Portfolio Integration -->
+<aside class="w-96 bg-white flex flex-col overflow-hidden">
+<div class="p-6 border-b border-border-soft">
+<h2 class="text-xs font-bold tracking-widest uppercase text-slate-400 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">account_balance_wallet</span> Portfolio Architecture
+                </h2>
+</div>
+<div class="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar">
+<!-- Portfolio Summary -->
+<div class="grid grid-cols-2 gap-4">
+<div class="col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-end">
+<div>
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Balance</p>
+<p class="text-2xl font-black text-primary">$1,284,942.00</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">P/L (24h)</p>
+<p class="text-sm font-bold text-status-pass">+$12,482.12 <span class="text-[10px] font-medium opacity-80">(+0.98%)</span></p>
+</div>
+</div>
+<div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Available Cash</p>
+<p class="text-lg font-bold text-primary">$142,309</p>
+</div>
+<div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Active Assets</p>
+<p class="text-lg font-bold text-primary">12</p>
+</div>
+</div>
+<!-- Positions Table -->
+<div class="space-y-4">
+<h3 class="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Active Positions</h3>
+<div class="bg-white rounded-xl border border-border-soft overflow-hidden shadow-sm">
+<table class="w-full text-left">
+<thead class="bg-slate-50 border-b border-border-soft">
+<tr>
+<th class="px-4 py-2 text-[10px] font-bold uppercase text-slate-400">Ticker</th>
+<th class="px-4 py-2 text-[10px] font-bold uppercase text-slate-400 text-right">Qty</th>
+<th class="px-4 py-2 text-[10px] font-bold uppercase text-slate-400 text-right">Price</th>
+<th class="px-4 py-2 text-[10px] font-bold uppercase text-slate-400 text-right">Value</th>
+</tr>
+</thead>
+<tbody class="text-xs font-semibold">
+<tr class="border-b border-border-soft/50 hover:bg-slate-50/50">
+<td class="px-4 py-3 text-primary">MSFT</td>
+<td class="px-4 py-3 text-right text-slate-500">1,240</td>
+<td class="px-4 py-3 text-right text-slate-500">$407.00</td>
+<td class="px-4 py-3 text-right font-bold">$504k</td>
+</tr>
+<tr class="border-b border-border-soft/50 hover:bg-slate-50/50">
+<td class="px-4 py-3 text-primary">AAPL</td>
+<td class="px-4 py-3 text-right text-slate-500">850</td>
+<td class="px-4 py-3 text-right text-slate-500">$190.00</td>
+<td class="px-4 py-3 text-right font-bold">$161k</td>
+</tr>
+<tr class="border-b border-border-soft/50 hover:bg-slate-50/50">
+<td class="px-4 py-3 text-primary">TSLA</td>
+<td class="px-4 py-3 text-right text-slate-500">2,100</td>
+<td class="px-4 py-3 text-right text-slate-500">$170.00</td>
+<td class="px-4 py-3 text-right font-bold">$357k</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Recent Activity -->
+<div class="space-y-4">
+<h3 class="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Recent Activity</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-border-soft shadow-sm">
+<div class="bg-status-correct/10 p-2 rounded-lg text-status-correct">
+<span class="material-symbols-outlined text-sm">auto_fix_high</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-bold text-primary">Protocol Correction</p>
+<p class="text-[10px] text-slate-400">Rebalanced ETH exposure</p>
+</div>
+<span class="text-[9px] font-bold text-slate-300">2M AGO</span>
+</div>
+<div class="flex items-center gap-3 p-3 bg-white rounded-xl border border-border-soft shadow-sm">
+<div class="bg-status-block/10 p-2 rounded-lg text-status-block">
+<span class="material-symbols-outlined text-sm">block</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-bold text-primary">Attempt Blocked</p>
+<p class="text-[10px] text-slate-400">Invalid API signature</p>
+</div>
+<span class="text-[9px] font-bold text-slate-300">1H AGO</span>
+</div>
+</div>
+</div>
+</div>
+<div class="p-6 bg-slate-50 border-t border-border-soft flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-status-pass text-sm" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-[10px] font-black uppercase tracking-widest text-primary/70">SECURE ENV</span>
+</div>
+<span class="text-[10px] font-mono text-slate-400">#E-0992-FX</span>
+</div>
+</aside>
+</div>
+</body></html>

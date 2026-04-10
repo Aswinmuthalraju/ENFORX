@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ENFORX | Plugins &amp; Configuration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#1F3A5F",
+                    "accent": "#2A9D8F",
+                    "background": "#F8FAFC",
+                    "surface": "#FFFFFF",
+                    "border": "#E5E7EB",
+                    "text-primary": "#111827",
+                    "text-secondary": "#6B7280",
+                    "on-primary": "#FFFFFF"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.75rem",
+                    "lg": "0.75rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Inter", "sans-serif"],
+                    "body": ["Inter", "sans-serif"],
+                    "label": ["Inter", "sans-serif"]
+            },
+            "spacing": {
+                    "2": "0.5rem",
+                    "4": "1rem",
+                    "6": "1.5rem",
+                    "8": "2rem",
+                    "12": "3rem"
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; color: #111827; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .step-card.active {
+            border-color: #1F3A5F;
+            background-color: #FFFFFF;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        .step-card.active h3 {
+            color: #1F3A5F;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-primary min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="w-full top-0 sticky z-50 bg-surface border-b border-border font-sans antialiased text-sm tracking-tight">
+<div class="flex justify-between items-center h-16 px-8 w-full max-w-full">
+<div class="flex items-center gap-12">
+<span class="text-xl font-black tracking-tighter text-primary">ENFORX</span>
+<div class="hidden md:flex gap-8">
+<a class="text-text-secondary hover:text-text-primary transition-colors" href="#">Home</a>
+<a class="text-text-secondary hover:text-text-primary transition-colors" href="#">Console</a>
+<a class="text-text-primary font-bold border-b-2 border-primary pb-1" href="#">Plugins</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-slate-100 transition-colors text-text-secondary">
+<span class="material-symbols-outlined align-middle">notifications</span>
+</button>
+<button class="p-2 hover:bg-slate-100 transition-colors text-text-secondary">
+<span class="material-symbols-outlined align-middle">settings</span>
+</button>
+<img alt="User profile" class="w-8 h-8 rounded-full border border-border" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDsT03fawSO4tzbBe71CR0jcpdj0tKoBCUy6PEtSR6iAqvXXeWXyFBFfGJML9uPARkUTHMCqz66LtuB0xVwfwu1geaxD1YI6WRE0pYxLJbFHarBXicROjLZ-k_sqMx-J6DO5A7e9aWC9oDMJbw26pXy6GDMggAfMY8Amb70fV3L8p7F38N3-CjXK51likoFOt46fae8yV6MiFO5yVa2d12t7vqCCYPpy-n4zqTbjEWp3Sx8dQpLzhpMkUzXVT54PG6KkAzlPmGXRA"/>
+</div>
+</div>
+</nav>
+<main class="flex-1 max-w-6xl mx-auto w-full p-8 md:p-12">
+<header class="mb-12">
+<h1 class="font-headline text-3xl font-extrabold tracking-tight text-text-primary mb-2">Configuration Wizard</h1>
+<p class="text-text-secondary max-w-2xl text-sm uppercase tracking-widest font-medium">Enterprise Integration Setup • 4 Stages</p>
+</header>
+<div class="flex flex-col lg:flex-row gap-8">
+<!-- Left Side: 4-Step Vertical Workflow -->
+<div class="w-full lg:w-1/3 space-y-4">
+<button class="step-card active w-full text-left p-6 bg-surface border border-border transition-all hover:border-primary rounded-xl" id="step-1" onclick="activateStep(1)">
+<h3 class="font-bold text-sm mb-1 uppercase tracking-wider text-text-secondary">Step 1</h3>
+<p class="text-xs text-text-secondary">Define core connection parameters</p>
+</button>
+<button class="step-card w-full text-left p-6 bg-slate-50/50 border border-border transition-all hover:border-primary rounded-xl" id="step-2" onclick="activateStep(2)">
+<h3 class="font-bold text-sm mb-1 uppercase tracking-wider text-text-secondary">Step 2</h3>
+<p class="text-xs text-text-secondary">Configure security protocols</p>
+</button>
+<button class="step-card w-full text-left p-6 bg-slate-50/50 border border-border transition-all hover:border-primary rounded-xl" id="step-3" onclick="activateStep(3)">
+<h3 class="font-bold text-sm mb-1 uppercase tracking-wider text-text-secondary">Step 3</h3>
+<p class="text-xs text-text-secondary">Establish data routing rules</p>
+</button>
+<button class="step-card w-full text-left p-6 bg-slate-50/50 border border-border transition-all hover:border-primary rounded-xl" id="step-4" onclick="activateStep(4)">
+<h3 class="font-bold text-sm mb-1 uppercase tracking-wider text-text-secondary">Step 4</h3>
+<p class="text-xs text-text-secondary">Final audit and deployment</p>
+</button>
+</div>
+<!-- Right Side: Configuration Panel -->
+<div class="flex-1 bg-surface border border-border p-8 min-h-[500px] flex flex-col rounded-xl shadow-sm">
+<div class="mb-6 pb-4 border-b border-border flex justify-between items-center">
+<h2 class="text-xs font-bold uppercase tracking-widest text-text-primary" id="panel-title">Configuration: Step 1</h2>
+<span class="text-[10px] font-mono text-accent font-bold">UNSAVED CHANGES</span>
+</div>
+<div class="flex-1 flex flex-col">
+<label class="text-[10px] uppercase tracking-widest font-bold text-text-secondary mb-4">Policy Schema Editor</label>
+<textarea class="flex-1 w-full bg-slate-50 border border-border p-6 font-mono text-xs focus:ring-1 focus:ring-primary focus:border-primary outline-none resize-none leading-relaxed text-text-primary rounded-lg" id="config-editor" spellcheck="false">{
+    "connection": {
+        "id": "ENFORX_ALPHA_01",
+        "provider": "INTERNAL_MESH",
+        "timeout_ms": 5000,
+        "retry_policy": "EXPONENTIAL"
+    }
+}</textarea>
+</div>
+<div class="mt-8 flex justify-end gap-4">
+<button class="px-6 py-3 border border-border text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-colors rounded-lg text-text-primary">Discard</button>
+<button class="px-6 py-3 bg-primary text-on-primary text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-all rounded-lg">Save &amp; Continue</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full border-t border-border bg-surface font-sans text-[10px] tracking-widest uppercase mt-auto">
+<div class="flex flex-row justify-between items-center px-8 py-6 w-full">
+<span class="text-text-secondary">© 2024 ENFORX SECURE. SYSTEM VERSION 4.2.1</span>
+<div class="flex gap-6">
+<a class="text-text-secondary hover:text-primary transition-colors" href="#">Security Policy</a>
+<a class="text-text-secondary hover:text-primary transition-colors" href="#">Terms</a>
+<a class="text-text-secondary hover:text-primary transition-colors" href="#">Support</a>
+</div>
+</div>
+</footer>
+<script>
+        const configs = {
+            1: '{\n    "connection": {\n        "id": "ENFORX_ALPHA_01",\n        "provider": "INTERNAL_MESH",\n        "timeout_ms": 5000,\n        "retry_policy": "EXPONENTIAL"\n    }\n}',
+            2: '{\n    "security": {\n        "encryption": "AES-256-GCM",\n        "mfa_required": true,\n        "auth_token_ttl": 3600,\n        "ip_whitelist": ["10.0.0.1/24"]\n    }\n}',
+            3: '{\n    "routing": {\n        "default_egress": "US-EAST-1",\n        "failover": "EU-WEST-1",\n        "data_residency": "STRICT",\n        "compression": "LZ4"\n    }\n}',
+            4: '{\n    "deployment": {\n        "environment": "PRODUCTION",\n        "canary_enabled": true,\n        "traffic_split": 0.05,\n        "rollback_on_error": true\n    }\n}'
+        };
+
+        function activateStep(stepNum) {
+            // Remove active classes
+            document.querySelectorAll('.step-card').forEach(card => {
+                card.classList.remove('active', 'bg-surface', 'border-primary', 'shadow-sm');
+                card.classList.add('bg-slate-50/50', 'border-border');
+            });
+
+            // Add active class to selected
+            const activeCard = document.getElementById(`step-${stepNum}`);
+            activeCard.classList.add('active', 'bg-surface', 'border-primary');
+            activeCard.classList.remove('bg-slate-50/50', 'border-border');
+
+            // Update panel content
+            document.getElementById('panel-title').textContent = `Configuration: Step ${stepNum}`;
+            document.getElementById('config-editor').value = configs[stepNum];
+        }
+    </script>
+</body></html>
